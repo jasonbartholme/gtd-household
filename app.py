@@ -184,6 +184,7 @@ TEMPLATES = {
                 <div class="collapse navbar-collapse" id="navMain">
                     <ul class="navbar-nav me-auto">
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link fw-bold text-warning" href="{{ url_for('leaderboard') }}">Leaderboard 🏆</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('calendar_view') }}">Calendar</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('kanban') }}">Board</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('inbox') }}">Inbox</a></li>
@@ -198,6 +199,7 @@ TEMPLATES = {
                                 <option value="{{ u.id }}" {% if current_user and u.id == current_user.id %}selected{% endif %}>{{ u.name }}</option>
                             {% endfor %}
                         </select>
+                        <a href="{{ url_for('manage_users') }}" class="btn btn-sm btn-outline-secondary ms-2" title="Manage Users">⚙️</a>
                     </form>
                 </div>
             </div>
@@ -219,6 +221,87 @@ TEMPLATES = {
         {% block scripts %}{% endblock %}
     </body>
     </html>
+    """,
+    'leaderboard.html': """
+    {% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 mb-0 text-warning fw-bold">🏆 Chorenado Leaderboard</h2>
+    </div>
+
+    <!-- Today's Points -->
+    <div class="row mb-4">
+        {% for tp in todays_points %}
+        <div class="col-md-4 mb-3">
+            <div class="card bg-dark border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="text-muted small fw-bold">TODAY'S CHORENADO</h5>
+                    <h1 class="display-3 text-warning fw-bold">{{ tp.points }}</h1>
+                    <span class="badge bg-secondary fs-6">{{ tp.name }}</span>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-body text-center py-5">
+                    <h5 class="text-muted">No Chorenado points earned today yet!</h5>
+                    <p class="text-muted small">Move some tasks to 'Done' to get on the board.</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-4">
+        <!-- Top Daily Scores -->
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-info small fw-bold">TOP DAILY CHORENADO POINTS</div>
+                <div class="card-body p-0">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead><tr><th>Rank</th><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
+                        <tbody>
+                            {% for score in top_scores %}
+                            <tr>
+                                <td class="text-muted">#{{ loop.index }}</td>
+                                <td>{{ score.name }}</td>
+                                <td class="small">{{ score.date }}</td>
+                                <td class="text-end text-warning fw-bold">{{ score.points }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No data available.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Scores -->
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-success small fw-bold">MOST RECENT CHORENADO POINTS</div>
+                <div class="card-body p-0">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead><tr><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
+                        <tbody>
+                            {% for score in recent_scores %}
+                            <tr>
+                                <td>{{ score.name }}</td>
+                                <td class="small">{{ score.date }}</td>
+                                <td class="text-end text-success fw-bold">{{ score.points }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No data available.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
     """,
     'calendar.html': """
     {% extends "base.html" %}
@@ -937,6 +1020,65 @@ TEMPLATES = {
         </div>
     </div>
     {% endblock %}
+    """,
+    'users.html': """
+    {% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 mb-0">Household Members</h2>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addUserModal">+ Add Member</button>
+    </div>
+    <div class="row g-3">
+        {% for u in all_users %}
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title text-light mb-0">{{ u.name }}</h5>
+                        <span class="badge {{ 'bg-primary' if u.role == 'admin' else 'bg-secondary' }}">{{ u.role|title }}</span>
+                    </div>
+                    <p class="text-muted small mb-3">Capacity: {{ u.weekday_capacity_points }} (Wk) / {{ u.weekend_capacity_points }} (Wknd)</p>
+                    <button class="btn btn-sm btn-outline-info w-100" data-bs-toggle="modal" data-bs-target="#editUserModal{{ u.id }}">Edit User</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit User Modal -->
+        <div class="modal fade" id="editUserModal{{ u.id }}" tabindex="-1">
+            <div class="modal-dialog"><div class="modal-content bg-dark text-light border-secondary">
+                <form action="{{ url_for('edit_user', id=u.id) }}" method="POST">
+                    <div class="modal-header border-secondary"><h5 class="modal-title">Edit {{ u.name }}</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body">
+                        <div class="mb-3"><label class="small text-muted">Name</label><input type="text" name="name" class="form-control bg-dark text-light border-secondary" value="{{ u.name }}" required></div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6"><label class="small text-muted">Weekday Capacity</label><input type="number" name="weekday" class="form-control bg-dark text-light border-secondary" value="{{ u.weekday_capacity_points }}"></div>
+                            <div class="col-6"><label class="small text-muted">Weekend Capacity</label><input type="number" name="weekend" class="form-control bg-dark text-light border-secondary" value="{{ u.weekend_capacity_points }}"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary"><button class="btn btn-success w-100">Save Changes</button></div>
+                </form>
+            </div></div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal fade" id="addUserModal" tabindex="-1">
+        <div class="modal-dialog"><div class="modal-content bg-dark text-light border-secondary">
+            <form action="{{ url_for('add_user') }}" method="POST">
+                <div class="modal-header border-secondary"><h5 class="modal-title">Add New Member</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="small text-muted">Name</label><input type="text" name="name" class="form-control bg-dark text-light border-secondary" placeholder="E.g., Jane" required></div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><label class="small text-muted">Weekday Capacity</label><input type="number" name="weekday" class="form-control bg-dark text-light border-secondary" value="20"></div>
+                        <div class="col-6"><label class="small text-muted">Weekend Capacity</label><input type="number" name="weekend" class="form-control bg-dark text-light border-secondary" value="30"></div>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary"><button class="btn btn-success w-100">Add Member</button></div>
+            </form>
+        </div></div>
+    </div>
+    {% endblock %}
     """
 }
 app.jinja_loader = DictLoader(TEMPLATES)
@@ -1014,6 +1156,45 @@ def kanban():
     hid = session.get('household_id')
     items = ActionItem.query.filter_by(household_id=hid).order_by(ActionItem.created_at.desc()).all()
     return render_template('kanban.html', items=items)
+
+@app.route('/leaderboard')
+def leaderboard():
+    hid = session.get('household_id')
+    # Get all completed items
+    completed_items = ActionItem.query.filter_by(household_id=hid, status='done').all()
+    
+    # Create a quick lookup map for user names
+    users = {u.id: u.name for u in User.query.filter_by(household_id=hid).all()}
+
+    # Aggregate scores by user and by day
+    daily_scores = {} # Key: (user_id, date_str) -> Value: Total Points
+    for item in completed_items:
+        if not item.owner_user_id or not item.completed_at:
+            continue
+        d_str = item.completed_at.date().isoformat()
+        key = (item.owner_user_id, d_str)
+        daily_scores[key] = daily_scores.get(key, 0) + item.complexity_fib
+
+    today_str = date.today().isoformat()
+
+    # 1. Today's Totals
+    todays_points = [{'name': users.get(uid, 'Unknown'), 'points': pts}
+                     for (uid, d_str), pts in daily_scores.items() if d_str == today_str]
+    todays_points.sort(key=lambda x: x['points'], reverse=True)
+
+    # 2. Top Daily Chorenado Points (All time, top 10)
+    all_scores = [{'name': users.get(uid, 'Unknown'), 'date': d_str, 'points': pts}
+                  for (uid, d_str), pts in daily_scores.items()]
+    
+    top_scores = sorted(all_scores, key=lambda x: x['points'], reverse=True)[:10]
+
+    # 3. Most Recent Chorenado Points (Sorted by most recent dates)
+    recent_scores = sorted(all_scores, key=lambda x: x['date'], reverse=True)[:10]
+
+    return render_template('leaderboard.html', 
+                           todays_points=todays_points,
+                           top_scores=top_scores,
+                           recent_scores=recent_scores)
 
 @app.route('/calendar')
 @app.route('/calendar/<int:year>/<int:month>')
@@ -1161,6 +1342,8 @@ def update_status(item_id):
         action.status = new_status
         if new_status == 'done': 
             action.completed_at = datetime.utcnow()
+            # Set the owner to whoever actually did the work to ensure accurate Chorenado points
+            action.owner_user_id = session.get('user_id') 
             log_activity(session.get('user_id'), 'completed_task', f"Finished: {action.title}")
             
             if action.is_recurring:
@@ -1416,6 +1599,39 @@ def review():
     active_recurring = [item for item in recurring if item.status != 'done']
 
     return render_template('review.html', inbox_count=inbox_count, waiting_items=waiting, recurring_items=active_recurring)
+
+@app.route('/users')
+def manage_users():
+    return render_template('users.html')
+
+@app.route('/users/add', methods=['POST'])
+def add_user():
+    hid = session.get('household_id')
+    new_user = User(
+        household_id=hid,
+        name=request.form.get('name'),
+        weekday_capacity_points=int(request.form.get('weekday') or 20),
+        weekend_capacity_points=int(request.form.get('weekend') or 30),
+        role='member'
+    )
+    db.session.add(new_user)
+    db.session.commit()
+    log_activity(session.get('user_id'), 'add_user', f"Added member: {new_user.name}")
+    flash(f"Added new member: {new_user.name}", "success")
+    return redirect(url_for('manage_users'))
+
+@app.route('/users/<int:id>/edit', methods=['POST'])
+def edit_user(id):
+    u = db.session.get(User, id)
+    if u:
+        old_name = u.name
+        u.name = request.form.get('name')
+        u.weekday_capacity_points = int(request.form.get('weekday') or 20)
+        u.weekend_capacity_points = int(request.form.get('weekend') or 30)
+        db.session.commit()
+        log_activity(session.get('user_id'), 'edit_user', f"Updated member details for: {old_name}")
+        flash(f"Updated user: {u.name}", "success")
+    return redirect(url_for('manage_users'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
