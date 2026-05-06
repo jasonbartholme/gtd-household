@@ -218,6 +218,14 @@ TEMPLATES = {
             {% block content %}{% endblock %}
         </div>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+        <script>
+            document.addEventListener("DOMContentLoaded", function(){
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+                var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl)
+                })
+            });
+        </script>
         {% block scripts %}{% endblock %}
     </body>
     </html>
@@ -352,12 +360,12 @@ TEMPLATES = {
         <a href="{{ url_for('inbox') }}" class="btn btn-primary btn-sm">+ Capture Thought</a>
     </div>
     <div class="row g-3">
-        {% set cols = [('ready', 'Ready', 'info'), ('in_progress', 'Doing', 'warning'), ('blocked', 'Blocked', 'danger'), ('done', 'Done', 'success')] %}
-        {% for col_id, col_name, badge_color in cols %}
+        {% set cols = [('ready', 'Ready', 'info', 'Next Actions: Physical, visible actions you can take right now without waiting.'), ('in_progress', 'Doing', 'warning', 'Work in Progress: Limit this to maintain focus.'), ('blocked', 'Blocked', 'danger', 'Waiting On: Tasks stalled pending input from someone or something else.'), ('done', 'Done', 'success', 'Archived completions. Good job!')] %}
+        {% for col_id, col_name, badge_color, tooltip in cols %}
         <div class="col-12 col-md-3">
             <div class="p-1">
                 <div class="d-flex justify-content-between align-items-center mb-2 px-1">
-                    <span class="fw-bold text-uppercase small text-{{ badge_color }}">{{ col_name }}</span>
+                    <span class="fw-bold text-uppercase small text-{{ badge_color }}" data-bs-toggle="tooltip" title="{{ tooltip }}" style="cursor: help;">{{ col_name }} ℹ️</span>
                     <span class="badge bg-dark border border-secondary text-muted">{{ items|selectattr('status', 'equalto', col_id)|list|length }}</span>
                 </div>
                 <div class="kanban-col" id="{{ col_id }}" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)">
@@ -427,7 +435,7 @@ TEMPLATES = {
                 <div class="card-body">
                     <form action="{{ url_for('edit_action', id=action.id) }}" method="POST">
                         <div class="mb-3">
-                            <label class="small text-muted">Title</label>
+                            <label class="small text-muted" data-bs-toggle="tooltip" title="Make sure this starts with a verb! (e.g. 'Call the plumber' instead of 'Plumbing')." style="cursor: help;">Title ℹ️</label>
                             <input type="text" name="title" class="form-control bg-dark text-light border-secondary" value="{{ action.title }}" required>
                         </div>
                         <div class="row g-2 mb-3">
@@ -440,7 +448,7 @@ TEMPLATES = {
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="small text-muted">Chorenado</label>
+                                <label class="small text-muted" data-bs-toggle="tooltip" title="Relative effort. If a task takes less than 2 minutes, DO IT NOW instead of organizing it!" style="cursor: help;">Chorenado ℹ️</label>
                                 <select name="complexity_fib" class="form-select bg-dark text-light border-secondary">
                                     {% for val in [1, 2, 3, 5, 8, 13] %}
                                     <option value="{{ val }}" {% if action.complexity_fib == val %}selected{% endif %}>{{ val }}</option>
@@ -448,7 +456,7 @@ TEMPLATES = {
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <label class="small text-muted">Context</label>
+                                <label class="small text-muted" data-bs-toggle="tooltip" title="GTD Context: Group by location/tool (e.g., @Garage, @Phone) to batch process efficiently." style="cursor: help;">Context ℹ️</label>
                                 <input type="text" name="context" class="form-control bg-dark text-light border-secondary" value="{{ action.context or '' }}">
                             </div>
                             <div class="col-md-3">
@@ -535,11 +543,11 @@ TEMPLATES = {
                         <div class="tab-pane fade show active" id="single">
                             <form action="{{ url_for('add_inbox') }}" method="POST">
                                 <div class="mb-3">
-                                    <label class="form-label small text-muted">What's on your mind?</label>
+                                    <label class="form-label small text-muted" data-bs-toggle="tooltip" title="Brain Dump: Get every 'open loop' out of your head immediately. Don't organize it yet, just capture it." style="cursor: help;">What's on your mind? ℹ️</label>
                                     <input type="text" name="title" class="form-control bg-dark text-light border-secondary" placeholder="Fix leaky faucet..." required autofocus>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label small text-muted">Context (Optional)</label>
+                                    <label class="form-label small text-muted" data-bs-toggle="tooltip" title="Group by location/tool (e.g., @Garage) to batch process efficiently." style="cursor: help;">Context (Optional) ℹ️</label>
                                     <input type="text" name="context" class="form-control bg-dark text-light border-secondary" placeholder="e.g. Garage, Kitchen, PC">
                                 </div>
                                 <div class="mb-3">
@@ -554,7 +562,7 @@ TEMPLATES = {
                         <div class="tab-pane fade" id="bulk">
                             <form action="{{ url_for('add_inbox_bulk') }}" method="POST">
                                 <div class="mb-3">
-                                    <label class="form-label small text-muted">Items (One per line)</label>
+                                    <label class="form-label small text-muted" data-bs-toggle="tooltip" title="Rapid logging mode. Empty your head. We will clarify these later." style="cursor: help;">Items (One per line) ℹ️</label>
                                     <textarea name="bulk_items" class="form-control bg-dark text-light border-secondary" rows="6" placeholder="Sweep floor&#10;Organize workbench&#10;Check oil in mower" required></textarea>
                                 </div>
                                 <div class="mb-3">
@@ -593,17 +601,17 @@ TEMPLATES = {
                           <div class="modal-body">
                             <div class="mb-3"><label class="small text-muted">Title</label><input type="text" name="title" class="form-control bg-dark text-light border-secondary" value="{{ item.title }}" required></div>
                             <div class="row g-2 mb-3">
-                                <div class="col-4"><label class="small text-muted">Type</label>
+                                <div class="col-4"><label class="small text-muted" data-bs-toggle="tooltip" title="If a task takes less than 2 minutes, DO IT NOW instead of hitting save!" style="cursor: help;">Type ℹ️</label>
                                     <select name="item_type" class="form-select bg-dark text-light border-secondary">
                                         <option value="task">Task</option><option value="chore">Chore</option><option value="errand">Errand</option>
                                     </select>
                                 </div>
-                                <div class="col-4"><label class="small text-muted">Chorenado</label>
+                                <div class="col-4"><label class="small text-muted" data-bs-toggle="tooltip" title="Relative effort rating. Break large >13 tasks down into smaller actions." style="cursor: help;">Chorenado ℹ️</label>
                                     <select name="complexity_fib" class="form-select bg-dark text-light border-secondary">
                                         <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option>
                                     </select>
                                 </div>
-                                <div class="col-4"><label class="small text-muted">Context</label>
+                                <div class="col-4"><label class="small text-muted" data-bs-toggle="tooltip" title="GTD Context: Group by location/tool to batch process efficiently." style="cursor: help;">Context ℹ️</label>
                                     <input type="text" name="context" class="form-control bg-dark text-light border-secondary" value="{{ item.context or '' }}">
                                 </div>
                             </div>
@@ -986,15 +994,15 @@ TEMPLATES = {
     'review.html': """
     {% extends "base.html" %}
     {% block content %}
-    <div class="text-center py-4"><h2 class="text-info fw-bold mb-4">Weekly Review</h2>
+    <div class="text-center py-4"><h2 class="text-info fw-bold mb-4" data-bs-toggle="tooltip" title="The Weekly Review is the key to GTD. Get clear, get current, and get creative. Empty your inbox and review active lists." style="cursor: help;">Weekly Review ℹ️</h2>
         <div class="row justify-content-center">
             <div class="col-md-6">
                 <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
-                    <h5 class="text-primary">Inbox ({{ inbox_count }})</h5>
+                    <h5 class="text-primary" data-bs-toggle="tooltip" title="Process everything to zero. Decide what each item is and what the next action is." style="cursor: help;">Inbox ({{ inbox_count }}) ℹ️</h5>
                     <a href="{{ url_for('inbox') }}" class="btn btn-sm btn-primary px-4">Process</a>
                 </div>
                 <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
-                    <h5 class="text-warning">Waiting On</h5>
+                    <h5 class="text-warning" data-bs-toggle="tooltip" title="Review items blocked by others. Follow up with them if necessary!" style="cursor: help;">Waiting On ℹ️</h5>
                     <ul class="list-group list-group-flush">
                         {% for item in waiting_items %}
                         <li class="list-group-item bg-dark text-light border-secondary small">{{ item.title }}</li>
