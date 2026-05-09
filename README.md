@@ -1,58 +1,100 @@
-# GTD Household Manager 🏡
-A comprehensive, self-hosted household management web application inspired by the Getting Things Done (GTD) methodology. Built with Python, Flask, and SQLite, this application helps you brain-dump tasks, organize chores, track assets, manage consumable supplies, and monitor the total cost of ownership for your household items.
-## 🚀 Key Features
-* **Brain Dump Inbox:** Quick-capture UI for logging thoughts. Supports bulk pasting (e.g., pasting a list of 30 items for the "Garage" context at once).
-* **Kanban Workflow:** Visualize your work with *Ready, Doing, Blocked,* and *Done* columns. Supports drag-and-drop prioritization.
-* **Calendar View:** A month-at-a-glance visualization for scheduled tasks, due dates, and recurring chores.
-* **Recurrence Engine:** Tasks can be set to recur (Days/Weeks/Months). When marked "Done," the next instance automatically respawns on the board, carrying over linked assets and supplies.
-* **Asset & Battery Tracking:** Register vehicles, electronics, and tools. Track power sources, battery lifespans, and check-in/check-out status.
-* **Inventory & Supplies:** Track quantities of consumables (e.g., oil filters, cleaning supplies). Automatically generates an "Errand" on your board when stock dips below the reorder threshold.
-* **Maintenance Schedules & Cost Dashboards:** Schedule regular maintenance (e.g., 180-day oil changes). Log completions to auto-calculate the next due date and feed into the Asset's "Total Cost of Ownership" financial ledger.
-* **Weekly Review:** A dedicated dashboard to audit your unprocessed inbox, blocked items, and active recurring chores.
-* **Data Portability:** 100% local operation with one-click JSON database export and import for seamless backups and resets.
-## 🛠️ Installation
-**Prerequisites:** Python 3.8+
-1. **Clone the repository**
+GTD Household Manager
+=====================
 
-    git clone https://github.com/jasonbartholme/gtd-household.git
-    cd gtd-household
+A comprehensive, Python-driven household management system built around the "Getting Things Done" (GTD) methodology. This application is designed as a fully functional, single-file MVP using Flask and SQLite, making it incredibly easy to deploy locally on a home network.
 
-2. **Create a virtual environment (Recommended)**
+🌟 Key Features
+---------------
 
-    python -m venv venv
-**On macOS/Linux:**
-    source venv/bin/activate
-**On Windows:**
-    venv\Scripts\activate
+### 📥 The Inbox & Processing
 
-4. **Install dependencies**
+*   **Brain Dump:** Quickly capture raw thoughts, ideas, and open loops to get them out of your head.
+    
+*   **Bulk Capture:** Paste multiple items at once to quickly populate your inbox.
+    
+*   **Clarify Workflow:** Transform raw thoughts into actionable Next Actions, assign them to Projects, give them Contexts (e.g., @Garage), or defer them to the Someday/Maybe list.
+    
 
-    pip install Flask Flask-SQLAlchemy
+### 📋 Workflow & Kanban Board
 
-5. **Run the application**
+*   **Interactive Board:** Drag-and-drop Kanban interface powered by SortableJS with columns for Ready, Doing, Blocked (Waiting On), and Done.
+    
+*   **Smart Filtering:** Quickly toggle the "Ready" column to view All items, Recurring chores, Project-specific actions, or Errands.
+    
+*   **Action Types:** Categorize items as Tasks, Chores, or Errands.
+    
+*   **Recurring Tasks:** Actions can be set to recur automatically (e.g., every 2 weeks). Completing a recurring task automatically calculates the next due date and respawns it on the board.
+    
+*   **Contexts & Due Dates:** Visually track where things need to happen and when they are due.
+    
 
-    python app.py
+### 🗺️ Planning & Strategy
 
-Note: On the first run, the application will automatically create the gtd.db SQLite database and seed it with default household data.*
+*   **Project Management:** Group multi-step outcomes into active Projects. Track progress via visual progress bars calculated from completed next actions.
+    
+*   **Someday / Maybe Incubator:** Store ideas you aren't ready to commit to yet, keeping your active board clutter-free. Activate them with a single click.
+    
+*   **Dynamic Calendar:** A visual monthly calendar grid highlighting days with due actions.
+    
+*   **Household Lists:** Create custom, taggable lists (e.g., Groceries, Packing, Menards Run) tied to specific geographical contexts. Features drag-and-drop reordering, quick-add, and soft-deletion.
+    
 
-5. **Open in your browser**
-Navigate to http://localhost:5000
-## 📖 How to Use (The Workflow)
-This app is designed around a continuous flow of productivity:
-1. **Capture (Inbox):** Whenever a thought crosses your mind ("Replace furnace filter", "Fix leaky faucet"), drop it in the **Inbox**. Use the Bulk dump tab after a brainstorming session.
-2. **Clarify (Process):** Go to the Inbox and click "Process". Decide if the item is a Task, Chore, or Errand. Assign a Context (e.g., @Kitchen), a "Chorenado" complexity score (Fibonacci), and establish if it needs to recur.
-3. **Organize (Assets & Supplies):** Link your Tasks to specific physical Assets or Required Supplies. (e.g., Link an "Oil Change" task to the "VW Wagen" asset and the "5W-30 Oil" supply).
-4. **Reflect (Review):** Use the **Review** tab weekly to ensure your Inbox is at zero, audit tasks you are "Waiting On", and check your active recurring schedules.
-5. **Engage (Kanban & Calendar):** Work off the Kanban board. Drag items into "Doing", and finally to "Done" to log the activity and trigger any auto-respawns.
-## 🗺️ Future Roadmap
-While the MVP is fully functional, here are the logical next steps for development based on the core architecture goals:
-- [ ] **External Sync:** Two-way integration with Google Calendar / CalDAV for scheduled time-blocking.
-- [ ] **Geolocation Errands:** Attach Lat/Long coordinates to "Errands" to enable proximity-based sorting (e.g., "Show me hardware store errands when I am near Home Depot").
-- [ ] **Multiplayer Enhancements:** Expand the capacity tracking system so household members can "spend" their Weekday/Weekend capacity points on tasks.
-- [ ] **QR Code Scanning:** Generate printable QR codes for Assets to enable fast check-out/check-in via smartphone camera.
-- [ ] **Push Notifications:** PWA (Progressive Web App) support to deliver browser push notifications for overdue maintenance and low-stock supplies.
-## 🤝 Contributing
-Pull requests are welcome! If you're planning a major change or database schema update, please open an issue first to discuss what you would like to change.
-Remember to clear or migrate your gtd.db when making changes to SQLAlchemy models.
-## 📄 License
-[MIT](https://choosealicense.com/licenses/mit/)
+### 🛠️ Asset & Supply Tracking
+
+*   **Asset Management:** Track valuable household items (vehicles, appliances, electronics) including location, purchase URLs, and check-in/check-out status.
+    
+*   **Power Tracking:** Monitor power sources, battery types, and expected battery lifespans for relevant assets.
+    
+*   **Cost of Ownership Dashboard:** Automatically logs and totals all general expenses and maintenance costs associated with an asset.
+    
+*   **Maintenance Schedules:** Setup recurring maintenance tasks (e.g., "Synthetic Oil Change every 180 days"). Logging completion automatically adds to the asset's expense history and calculates the next due date.
+    
+*   **Supply Management:** Keep track of consumables with set reorder thresholds.
+    
+*   **Smart Restocking:** When a supply drops below its threshold, the system can automatically add it to your General Shopping List or generate a new Errand to restock it. Link supplies directly to the assets that use them.
+    
+
+### 🏆 Metrics & Gamification
+
+*   **The "Chorenado" System:** Tasks are assigned complexity points using the Fibonacci sequence (1, 2, 3, 5, 8, 13).
+    
+*   **Leaderboard:** Compete with household members! Tracks the top daily point earners, all-time high scores, and most recent points awarded.
+    
+*   **Weekly Review Hub:** A dedicated screen to guide you through clearing your inbox, reviewing recurring items, and following up on blocked tasks.
+    
+*   **Activity Dashboard:** Monitor recent household activity, today's completion count, and manage overall system health.
+    
+
+### ⚙️ Administration & Data Management
+
+*   **Multi-User Environment:** Support for multiple household members with configurable weekday and weekend capacity limits.
+    
+*   **Data Portability:** 1-click JSON export of the entire database for seamless backups. Restore functionality to import your JSON data securely.
+    
+*   **Admin Purge:** Soft-deleted list items and lists are kept for 30 days. Admins can execute a hard purge to permanently delete stale data and keep the database optimized.
+    
+*   **Timezone Aware:** Uses the zoneinfo library to ensure all database entries and Chorenado points correctly align with Central Time (US/Chicago).
+    
+
+🚀 Setup & Installation
+-----------------------
+
+This MVP is self-contained within a single Python file, along with inline HTML/Jinja2 templates, making setup virtually instant.
+
+1.  **Prerequisites:** Make sure you have Python 3.9+ installed.
+    
+2.  pip install flask flask-sqlalchemy tzdata
+    
+3.  python app.py
+    
+4.  **Access:** Open your browser and navigate to http://localhost:5000. The SQLite database (gtd.db) will be created automatically on the first run, seeded with sample demo data.
+    
+
+💻 Tech Stack
+-------------
+
+*   **Backend:** Python, Flask, Flask-SQLAlchemy, SQLite
+    
+*   **Frontend:** Embedded Jinja2 Templates, Bootstrap 5.3.2 (Dark Theme), Vanilla JavaScript
+    
+*   **Libraries:** SortableJS (for drag-and-drop functionality)
