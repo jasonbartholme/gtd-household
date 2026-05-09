@@ -4,6 +4,7 @@ from datetime import datetime, date, timedelta
 from flask import Flask, request, redirect, url_for, session, flash, render_template, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from jinja2 import DictLoader
+from zoneinfo import ZoneInfo
 
 # ==========================================
 # 1. APP CONFIGURATION
@@ -15,13 +16,17 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+def get_local_now():
+    """Returns current time in Central Time (US/Chicago) as a naive datetime for SQLite."""
+    return datetime.now(ZoneInfo("America/Chicago")).replace(tzinfo=None)
+
 # ==========================================
 # 2. DATABASE MODELS
 # ==========================================
 class Household(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -37,7 +42,7 @@ class Project(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(50), default='active') # active, completed
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
     
     actions = db.relationship('ActionItem', backref='project', lazy=True)
@@ -49,7 +54,7 @@ class InboxItem(db.Model):
     title = db.Column(db.String(200), nullable=False)
     context = db.Column(db.String(100), nullable=True)
     note = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     processed_at = db.Column(db.DateTime, nullable=True)
     converted_action_id = db.Column(db.Integer, db.ForeignKey('action_item.id'), nullable=True)
 
@@ -80,7 +85,7 @@ class ActionItem(db.Model):
     complexity_fib = db.Column(db.Integer, default=1)
     base_points = db.Column(db.Integer, default=10)
     owner_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
     due_date = db.Column(db.DateTime, nullable=True) 
     
@@ -99,7 +104,7 @@ class ActivityLog(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     action_type = db.Column(db.String(50))
     description = db.Column(db.String(255))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=get_local_now)
 
 class Asset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -135,7 +140,7 @@ class Expense(db.Model):
     asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=True)
     amount = db.Column(db.Float, nullable=False)
     description = db.Column(db.String(200))
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+    date = db.Column(db.DateTime, default=get_local_now)
     
     is_maintenance = db.Column(db.Boolean, default=False)
     maintenance_schedule_id = db.Column(db.Integer, db.ForeignKey('maintenance_schedule.id'), nullable=True)
@@ -161,7 +166,7 @@ class HouseholdList(db.Model):
     location_context = db.Column(db.String(100), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     
     items = db.relationship('ListItem', backref='list', lazy=True, cascade="all, delete-orphan", order_by="ListItem.sort_order")
     owner = db.relationship('User', backref='lists_owned', lazy=True)
@@ -175,7 +180,7 @@ class ListItem(db.Model):
     sort_order = db.Column(db.Integer, default=0)
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
 
 def log_activity(user_id, action_type, description):
     if user_id:
@@ -192,7 +197,7 @@ TEMPLATES = {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>GTD Household</title>
+        <title>{% if page_title %}{{ page_title }} - {% endif %}GTD Household</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
             :root { --bs-body-bg: #0f1111; }
@@ -200,7 +205,14 @@ TEMPLATES = {
             .kanban-card { cursor: grab; margin-bottom: 12px; background: #212529; border: 1px solid #373b3e; }
             .kanban-card:active { cursor: grabbing; opacity: 0.8; }
             .drag-over { border: 2px dashed #0d6efd; background: rgba(13, 110, 253, 0.05); }
-            .navbar { background-color: #161919 !important; border-bottom: 1px solid #373b3e; }
+            /* Updated Navbar with CSS Texture */
+            .navbar { 
+                background-color: #161919 !important; 
+                background-image: radial-gradient(#373b3e 1px, transparent 1px);
+                background-size: 16px 16px;
+                border-bottom: 1px solid #373b3e; 
+            }
+            .dropdown-menu-dark { background-color: #161919; border-color: #373b3e; }
             .card-hover:hover { border-color: #0d6efd !important; cursor: pointer; }
             .cal-day { height: 120px; border: 1px solid #373b3e; background: #161919; overflow-y: auto; padding: 4px; }
             .cal-day.today { background: #1a1e21; border-color: #0d6efd; }
@@ -220,17 +232,47 @@ TEMPLATES = {
                 </button>
                 <div class="collapse navbar-collapse" id="navMain">
                     <ul class="navbar-nav me-auto">
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
-                        <li class="nav-item"><a class="nav-link fw-bold text-warning" href="{{ url_for('leaderboard') }}">Leaderboard 🏆</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('calendar_view') }}">Calendar</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('kanban') }}">Board</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('inbox') }}">Inbox</a></li>
-                        <li class="nav-item"><a class="nav-link text-info" href="{{ url_for('manage_projects') }}">Projects</a></li>
-                        <li class="nav-item"><a class="nav-link text-info" href="{{ url_for('manage_lists') }}">Lists</a></li>
-                        <li class="nav-item"><a class="nav-link text-secondary" href="{{ url_for('someday_view') }}">Someday/Maybe</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('assets') }}">Assets</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('supplies') }}">Supplies</a></li>
-                        <li class="nav-item"><a class="nav-link text-primary fw-bold" href="{{ url_for('review') }}">Review</a></li>
+                        <!-- Workflow Dropdown -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle {% if request.endpoint in ['kanban', 'inbox', 'review'] %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">
+                                Workflow {% if unproc_inbox > 0 %}<span class="badge bg-danger rounded-pill ms-1">{{ unproc_inbox }}</span>{% endif %}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-dark">
+                                <li><a class="dropdown-item" href="{{ url_for('kanban') }}">Board</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('inbox') }}">Inbox {% if unproc_inbox > 0 %}<span class="badge bg-danger rounded-pill float-end">{{ unproc_inbox }}</span>{% endif %}</a></li>
+                                <li><a class="dropdown-item text-primary" href="{{ url_for('review') }}">Review</a></li>
+                            </ul>
+                        </li>
+                        
+                        <!-- Planning Dropdown -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle {% if request.endpoint in ['manage_projects', 'manage_lists', 'calendar_view', 'someday_view'] %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">Planning</a>
+                            <ul class="dropdown-menu dropdown-menu-dark">
+                                <li><a class="dropdown-item" href="{{ url_for('manage_projects') }}">Projects</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('manage_lists') }}">Lists</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('calendar_view') }}">Calendar</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-secondary" href="{{ url_for('someday_view') }}">Someday/Maybe</a></li>
+                            </ul>
+                        </li>
+
+                        <!-- Household Dropdown -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle {% if request.endpoint in ['supplies', 'assets'] %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">Household</a>
+                            <ul class="dropdown-menu dropdown-menu-dark">
+                                <li><a class="dropdown-item" href="{{ url_for('supplies') }}">Supplies</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('assets') }}">Assets</a></li>
+                            </ul>
+                        </li>
+
+                        <!-- Metrics Dropdown -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle {% if request.endpoint in ['dashboard', 'leaderboard'] %}active{% endif %}" href="#" role="button" data-bs-toggle="dropdown">Metrics</a>
+                            <ul class="dropdown-menu dropdown-menu-dark">
+                                <li><a class="dropdown-item" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                                <li><a class="dropdown-item text-warning" href="{{ url_for('leaderboard') }}">Leaderboard 🏆</a></li>
+                            </ul>
+                        </li>
                     </ul>
                     <form class="d-flex align-items-center" action="{{ url_for('switch_user') }}" method="POST">
                         <span class="text-muted small me-2">User:</span>
@@ -271,194 +313,32 @@ TEMPLATES = {
     </body>
     </html>
     """,
-    'dashboard.html': """
-    {% extends "base.html" %}
-    {% block content %}
-    <h2 class="mb-4">Dashboard</h2>
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-body text-center">
-                    <h5 class="text-muted small fw-bold">COMPLETED TODAY</h5>
-                    <h1 class="display-3 text-success">{{ today_completions }}</h1>
-                </div>
-            </div>
-            
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary text-info small fw-bold">DATA MANAGEMENT</div>
-                <div class="card-body">
-                    <p class="text-muted small mb-3">Backup or restore your household data in JSON format.</p>
-                    <a href="{{ url_for('export_data') }}" class="btn btn-sm btn-outline-info w-100 mb-3">Export JSON Backup</a>
-                    <form action="{{ url_for('import_data') }}" method="POST" enctype="multipart/form-data">
-                        <label class="text-muted small mb-1">Restore from Backup:</label>
-                        <div class="input-group input-group-sm">
-                            <input type="file" name="backup_file" class="form-control bg-dark text-light border-secondary" accept=".json" required>
-                            <button class="btn btn-danger" type="submit" onclick="return confirm('WARNING: This will erase all current data and replace it with the backup. Continue?');">Restore</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-            
-            {% if current_user and current_user.role == 'admin' %}
-            <div class="card bg-dark border-danger shadow-sm mb-4">
-                <div class="card-header border-danger text-danger small fw-bold">ADMIN ACTIONS</div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted small">Total Active Lists:</span>
-                        <span class="text-light fw-bold">{{ active_lists_count }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-3">
-                        <span class="text-muted small" data-bs-toggle="tooltip" title="Soft-deleted items older than 30 days awaiting permanent deletion.">Pending Purge Data: ℹ️</span>
-                        <span class="text-warning fw-bold">{{ purgeable_lists_count }} lists / {{ purgeable_items_count }} items</span>
-                    </div>
-                    {% if purgeable_lists_count > 0 or purgeable_items_count > 0 %}
-                    <form action="{{ url_for('admin_purge') }}" method="POST" onsubmit="return confirm('Permanently delete stale soft-deleted data? This cannot be undone.');">
-                        <button class="btn btn-sm btn-danger w-100">Execute Hard Purge</button>
-                    </form>
-                    {% else %}
-                        <button class="btn btn-sm btn-secondary w-100" disabled>Database Clean</button>
-                    {% endif %}
-                </div>
-            </div>
-            {% endif %}
-        </div>
-        <div class="col-md-8">
-            <div class="card bg-dark border-secondary shadow-sm">
-                <div class="card-header border-secondary text-primary small fw-bold">RECENT ACTIVITY</div>
-                <ul class="list-group list-group-flush">
-                    {% for log in activity %}
-                    <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
-                        <span><span class="badge bg-secondary me-2">{{ log.action_type|replace('_', ' ')|title }}</span> {{ log.description }}</span>
-                        <small class="text-muted">{{ log.timestamp.strftime('%H:%M') }}</small>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-        </div>
-    </div>
-    {% endblock %}
-    """,
-    'leaderboard.html': """
-    {% extends "base.html" %}
-    {% block content %}
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h4 mb-0 text-warning fw-bold">🏆 Chorenado Leaderboard</h2>
-    </div>
-
-    <div class="row mb-4">
-        {% for tp in todays_points %}
-        <div class="col-md-4 mb-3">
-            <div class="card bg-dark border-warning shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h5 class="text-muted small fw-bold">TODAY'S CHORENADO</h5>
-                    <h1 class="display-3 text-warning fw-bold">{{ tp.points }}</h1>
-                    <span class="badge bg-secondary fs-6">{{ tp.name }}</span>
-                </div>
-            </div>
-        </div>
-        {% else %}
-        <div class="col-12">
-            <div class="card bg-dark border-secondary shadow-sm">
-                <div class="card-body text-center py-5">
-                    <h5 class="text-muted">No Chorenado points earned today yet!</h5>
-                    <p class="text-muted small">Move some tasks to 'Done' to get on the board.</p>
-                </div>
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="row g-4">
-        <div class="col-md-6">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-header border-secondary text-info small fw-bold">TOP DAILY CHORENADO POINTS</div>
-                <div class="card-body p-0">
-                    <table class="table table-dark table-striped mb-0">
-                        <thead><tr><th>Rank</th><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
-                        <tbody>
-                            {% for score in top_scores %}
-                            <tr>
-                                <td class="text-muted">#{{ loop.index }}</td>
-                                <td>{{ score.name }}</td>
-                                <td class="small">{{ score.date }}</td>
-                                <td class="text-end text-warning fw-bold">{{ score.points }}</td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="4" class="text-center text-muted py-3">No data available.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-header border-secondary text-success small fw-bold">MOST RECENT CHORENADO POINTS</div>
-                <div class="card-body p-0">
-                    <table class="table table-dark table-striped mb-0">
-                        <thead><tr><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
-                        <tbody>
-                            {% for score in recent_scores %}
-                            <tr>
-                                <td>{{ score.name }}</td>
-                                <td class="small">{{ score.date }}</td>
-                                <td class="text-end text-success fw-bold">{{ score.points }}</td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="3" class="text-center text-muted py-3">No data available.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endblock %}
-    """,
-    'calendar.html': """
-    {% extends "base.html" %}
-    {% block content %}
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h4 mb-0">{{ month_name }} {{ year }}</h2>
-        <div>
-            <a href="{{ url_for('calendar_view', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary btn-sm">&larr; Prev</a>
-            <a href="{{ url_for('calendar_view') }}" class="btn btn-outline-primary btn-sm">Today</a>
-            <a href="{{ url_for('calendar_view', year=next_year, month=next_month) }}" class="btn btn-outline-secondary btn-sm">Next &rarr;</a>
-        </div>
-    </div>
-    <div class="table-responsive">
-        <div class="row g-0 text-center border-bottom border-secondary mb-1">
-            <div class="col py-2 fw-bold text-muted small">SUN</div>
-            <div class="col py-2 fw-bold text-muted small">MON</div>
-            <div class="col py-2 fw-bold text-muted small">TUE</div>
-            <div class="col py-2 fw-bold text-muted small">WED</div>
-            <div class="col py-2 fw-bold text-muted small">THU</div>
-            <div class="col py-2 fw-bold text-muted small">FRI</div>
-            <div class="col py-2 fw-bold text-muted small">SAT</div>
-        </div>
-        {% for week in calendar_weeks %}
-        <div class="row g-0">
-            {% for day in week %}
-            <div class="col cal-day {{ 'today' if day.is_today }} {{ 'other-month' if not day.in_month }}">
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                    <span class="small fw-bold {{ 'text-primary' if day.is_today else 'text-muted' }}">{{ day.day_num }}</span>
-                </div>
-                {% for event in day.events %}
-                    <a href="{{ url_for('edit_action', id=event.id) }}" 
-                       class="cal-event bg-{{ 'info' if event.item_type == 'task' else 'warning' if event.item_type == 'chore' else 'success' }} text-dark fw-bold">
-                        {% if event.is_recurring %}🔄{% endif %} {{ event.title }}
-                    </a>
-                {% endfor %}
-            </div>
-            {% endfor %}
-        </div>
-        {% endfor %}
-    </div>
-    {% endblock %}
-    """,
     'kanban.html': """
     {% extends "base.html" %}
+
+    {% macro render_kanban_card(item) %}
+    <div class="card kanban-card shadow-sm" draggable="true" ondragstart="drag(event)" id="card-{{ item.id }}" data-id="{{ item.id }}">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <span class="badge bg-secondary-subtle text-secondary small text-capitalize">{{ item.item_type }}</span>
+                <span class="text-muted small">Chorenado: {{ item.complexity_fib }}</span>
+            </div>
+            <h6 class="card-title text-light mb-1">
+                <a href="{{ url_for('edit_action', id=item.id) }}" class="text-decoration-none text-info" title="Click to Edit">{{ item.title }}</a>
+            </h6>
+            <div class="small mb-1">
+                {% if item.project %}<span class="badge border border-primary text-primary me-1">📁 {{ item.project.name }}</span>{% endif %}
+                {% if item.context %}<span class="badge border border-secondary text-secondary me-1">@{{ item.context }}</span>{% endif %}
+                {% if item.due_date %}📅 {{ item.due_date.strftime('%m-%d') }}{% endif %}
+                {% if item.is_recurring %}<span class="text-info ms-2">🔄 Every {{ item.recur_interval }} {{ item.recur_unit }}</span>{% endif %}
+            </div>
+            {% if item.description %}
+                <p class="card-text text-muted small mb-1">{{ item.description[:60] }}{% if item.description|length > 60 %}...{% endif %}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endmacro %}
+
     {% block content %}
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="h4 mb-0">Workflow Board</h2>
@@ -474,28 +354,56 @@ TEMPLATES = {
                     <span class="badge bg-dark border border-secondary text-muted">{{ items|selectattr('status', 'equalto', col_id)|list|length }}</span>
                 </div>
                 <div class="kanban-col" id="{{ col_id }}" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)">
-                    {% for item in items if item.status == col_id %}
-                    <div class="card kanban-card shadow-sm" draggable="true" ondragstart="drag(event)" id="card-{{ item.id }}" data-id="{{ item.id }}">
-                        <div class="card-body p-3">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <span class="badge bg-secondary-subtle text-secondary small text-capitalize">{{ item.item_type }}</span>
-                                <span class="text-muted small">Chorenado: {{ item.complexity_fib }}</span>
-                            </div>
-                            <h6 class="card-title text-light mb-1">
-                                <a href="{{ url_for('edit_action', id=item.id) }}" class="text-decoration-none text-info" title="Click to Edit">{{ item.title }}</a>
-                            </h6>
-                            <div class="small mb-1">
-                                {% if item.project %}<span class="badge border border-primary text-primary me-1">📁 {{ item.project.name }}</span>{% endif %}
-                                {% if item.context %}<span class="badge border border-secondary text-secondary me-1">@{{ item.context }}</span>{% endif %}
-                                {% if item.due_date %}📅 {{ item.due_date.strftime('%m-%d') }}{% endif %}
-                                {% if item.is_recurring %}<span class="text-info ms-2">🔄 Every {{ item.recur_interval }} {{ item.recur_unit }}</span>{% endif %}
-                            </div>
-                            {% if item.description %}
-                                <p class="card-text text-muted small mb-1">{{ item.description[:60] }}{% if item.description|length > 60 %}...{% endif %}</p>
+                    
+                    {% if col_id == 'ready' %}
+                        <!-- Kanban Filters for Ready Column -->
+                        <div class="mb-3 d-flex gap-1 flex-wrap kanban-filters">
+                            <button class="btn btn-sm py-0 px-2 btn-outline-secondary active filter-btn" onclick="filterReady('all', this)">All</button>
+                            <button class="btn btn-sm py-0 px-2 btn-outline-info filter-btn" onclick="filterReady('recurring', this)">Recurring</button>
+                            <button class="btn btn-sm py-0 px-2 btn-outline-primary filter-btn" onclick="filterReady('projects', this)">Projects</button>
+                            <button class="btn btn-sm py-0 px-2 btn-outline-warning filter-btn" onclick="filterReady('errands', this)">Errands</button>
+                        </div>
+
+                        {% set ready_items = items|selectattr('status', 'equalto', 'ready')|list %}
+                        
+                        <div class="ready-group" data-group="recurring">
+                            {% set rec_items = ready_items|selectattr('is_recurring', 'equalto', true)|list %}
+                            {% if rec_items %}
+                                <div class="text-muted small fw-bold mt-2 mb-2 border-bottom border-secondary pb-1">Recurring Items</div>
+                                {% for item in rec_items %} {{ render_kanban_card(item) }} {% endfor %}
                             {% endif %}
                         </div>
-                    </div>
-                    {% endfor %}
+
+                        <div class="ready-group" data-group="projects">
+                            {% set proj_items = ready_items|selectattr('is_recurring', 'equalto', false)|rejectattr('project_id', 'none')|list %}
+                            {% if proj_items %}
+                                <div class="text-muted small fw-bold mt-3 mb-2 border-bottom border-secondary pb-1">Project Actions</div>
+                                {% for item in proj_items %} {{ render_kanban_card(item) }} {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <div class="ready-group" data-group="errands">
+                            {% set err_items = ready_items|selectattr('is_recurring', 'equalto', false)|selectattr('project_id', 'none')|selectattr('item_type', 'equalto', 'errand')|list %}
+                            {% if err_items %}
+                                <div class="text-muted small fw-bold mt-3 mb-2 border-bottom border-secondary pb-1">Errands & Shopping</div>
+                                {% for item in err_items %} {{ render_kanban_card(item) }} {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <div class="ready-group" data-group="tasks">
+                            {% set task_items = ready_items|selectattr('is_recurring', 'equalto', false)|selectattr('project_id', 'none')|rejectattr('item_type', 'equalto', 'errand')|list %}
+                            {% if task_items %}
+                                <div class="text-muted small fw-bold mt-3 mb-2 border-bottom border-secondary pb-1">Tasks & Chores</div>
+                                {% for item in task_items %} {{ render_kanban_card(item) }} {% endfor %}
+                            {% endif %}
+                        </div>
+
+                    {% else %}
+                        <!-- Standard loop for Doing, Blocked, Done -->
+                        {% for item in items if item.status == col_id %}
+                            {{ render_kanban_card(item) }}
+                        {% endfor %}
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -524,6 +432,22 @@ TEMPLATES = {
                 if(!data.success) window.location.reload();
                 else if (newStatus === 'done' && data.respawned) {
                     location.reload(); 
+                }
+            });
+        }
+
+        // Kanban Filter Logic
+        function filterReady(type, btnElement) {
+            // Update Active State on Buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            btnElement.classList.add('active');
+
+            // Show/Hide Groups
+            document.querySelectorAll('.ready-group').forEach(group => {
+                if (type === 'all' || group.dataset.group === type) {
+                    group.style.display = 'block';
+                } else {
+                    group.style.display = 'none';
                 }
             });
         }
@@ -982,6 +906,192 @@ TEMPLATES = {
                 </div>
             </div>
         </div>
+    </div>
+    {% endblock %}
+    """,
+    'dashboard.html': """
+    {% extends "base.html" %}
+    {% block content %}
+    <h2 class="mb-4">Dashboard</h2>
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-body text-center">
+                    <h5 class="text-muted small fw-bold">COMPLETED TODAY</h5>
+                    <h1 class="display-3 text-success">{{ today_completions }}</h1>
+                </div>
+            </div>
+            
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-header border-secondary text-info small fw-bold">DATA MANAGEMENT</div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">Backup or restore your household data in JSON format.</p>
+                    <a href="{{ url_for('export_data') }}" class="btn btn-sm btn-outline-info w-100 mb-3">Export JSON Backup</a>
+                    <form action="{{ url_for('import_data') }}" method="POST" enctype="multipart/form-data">
+                        <label class="text-muted small mb-1">Restore from Backup:</label>
+                        <div class="input-group input-group-sm">
+                            <input type="file" name="backup_file" class="form-control bg-dark text-light border-secondary" accept=".json" required>
+                            <button class="btn btn-danger" type="submit" onclick="return confirm('WARNING: This will erase all current data and replace it with the backup. Continue?');">Restore</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            {% if current_user and current_user.role == 'admin' %}
+            <div class="card bg-dark border-danger shadow-sm mb-4">
+                <div class="card-header border-danger text-danger small fw-bold">ADMIN ACTIONS</div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span class="text-muted small">Total Active Lists:</span>
+                        <span class="text-light fw-bold">{{ active_lists_count }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span class="text-muted small" data-bs-toggle="tooltip" title="Soft-deleted items older than 30 days awaiting permanent deletion.">Pending Purge Data: ℹ️</span>
+                        <span class="text-warning fw-bold">{{ purgeable_lists_count }} lists / {{ purgeable_items_count }} items</span>
+                    </div>
+                    {% if purgeable_lists_count > 0 or purgeable_items_count > 0 %}
+                    <form action="{{ url_for('admin_purge') }}" method="POST" onsubmit="return confirm('Permanently delete stale soft-deleted data? This cannot be undone.');">
+                        <button class="btn btn-sm btn-danger w-100">Execute Hard Purge</button>
+                    </form>
+                    {% else %}
+                        <button class="btn btn-sm btn-secondary w-100" disabled>Database Clean</button>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        <div class="col-md-8">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-header border-secondary text-primary small fw-bold">RECENT ACTIVITY</div>
+                <ul class="list-group list-group-flush">
+                    {% for log in activity %}
+                    <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
+                        <span><span class="badge bg-secondary me-2">{{ log.action_type|replace('_', ' ')|title }}</span> {{ log.description }}</span>
+                        <small class="text-muted">{{ log.timestamp.strftime('%H:%M') }}</small>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+    """,
+    'leaderboard.html': """
+    {% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 mb-0 text-warning fw-bold">🏆 Chorenado Leaderboard</h2>
+    </div>
+
+    <div class="row mb-4">
+        {% for tp in todays_points %}
+        <div class="col-md-4 mb-3">
+            <div class="card bg-dark border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="text-muted small fw-bold">TODAY'S CHORENADO CHAMP</h5>
+                    <h1 class="display-3 text-warning fw-bold">{{ tp.points }}</h1>
+                    <span class="badge bg-secondary fs-6">{{ tp.name }}</span>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-body text-center py-5">
+                    <h5 class="text-muted">No Chorenado points earned today yet!</h5>
+                    <p class="text-muted small">Move some tasks to 'Done' to get on the board.</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-info small fw-bold">TOP DAILY CHORENADO CHAMP POINTS</div>
+                <div class="card-body p-0">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead><tr><th>Rank</th><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
+                        <tbody>
+                            {% for score in top_scores %}
+                            <tr>
+                                <td class="text-muted">#{{ loop.index }}</td>
+                                <td>{{ score.name }}</td>
+                                <td class="small">{{ score.date }}</td>
+                                <td class="text-end text-warning fw-bold">{{ score.points }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No data available.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-success small fw-bold">MOST RECENT CHORENADO POINTS</div>
+                <div class="card-body p-0">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead><tr><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
+                        <tbody>
+                            {% for score in recent_scores %}
+                            <tr>
+                                <td>{{ score.name }}</td>
+                                <td class="small">{{ score.date }}</td>
+                                <td class="text-end text-success fw-bold">{{ score.points }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No data available.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+    """,
+    'calendar.html': """
+    {% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 mb-0">{{ month_name }} {{ year }}</h2>
+        <div>
+            <a href="{{ url_for('calendar_view', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary btn-sm">&larr; Prev</a>
+            <a href="{{ url_for('calendar_view') }}" class="btn btn-outline-primary btn-sm">Today</a>
+            <a href="{{ url_for('calendar_view', year=next_year, month=next_month) }}" class="btn btn-outline-secondary btn-sm">Next &rarr;</a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <div class="row g-0 text-center border-bottom border-secondary mb-1">
+            <div class="col py-2 fw-bold text-muted small">SUN</div>
+            <div class="col py-2 fw-bold text-muted small">MON</div>
+            <div class="col py-2 fw-bold text-muted small">TUE</div>
+            <div class="col py-2 fw-bold text-muted small">WED</div>
+            <div class="col py-2 fw-bold text-muted small">THU</div>
+            <div class="col py-2 fw-bold text-muted small">FRI</div>
+            <div class="col py-2 fw-bold text-muted small">SAT</div>
+        </div>
+        {% for week in calendar_weeks %}
+        <div class="row g-0">
+            {% for day in week %}
+            <div class="col cal-day {{ 'today' if day.is_today }} {{ 'other-month' if not day.in_month }}">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                    <span class="small fw-bold {{ 'text-primary' if day.is_today else 'text-muted' }}">{{ day.day_num }}</span>
+                </div>
+                {% for event in day.events %}
+                    <a href="{{ url_for('edit_action', id=event.id) }}" 
+                       class="cal-event bg-{{ 'info' if event.item_type == 'task' else 'warning' if event.item_type == 'chore' else 'success' }} text-dark fw-bold">
+                        {% if event.is_recurring %}🔄{% endif %} {{ event.title }}
+                    </a>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
     </div>
     {% endblock %}
     """,
@@ -1663,7 +1773,37 @@ def inject_global_data():
     hid = session.get('household_id')
     all_projects = Project.query.filter_by(household_id=hid, status='active').all() if hid else []
     
-    return dict(current_user=current_user, all_users=all_users, all_projects=all_projects, today=date.today())
+    # Global unprocessed inbox count
+    unproc_inbox = InboxItem.query.filter_by(household_id=hid, processed_at=None).count() if hid else 0
+    
+    # Dynamic Page Titles
+    endpoints = {
+        'dashboard': 'Dashboard',
+        'leaderboard': 'Leaderboard',
+        'kanban': 'Board',
+        'inbox': 'Inbox',
+        'review': 'Review',
+        'manage_projects': 'Projects',
+        'manage_lists': 'Lists',
+        'someday_view': 'Someday/Maybe',
+        'calendar_view': 'Calendar',
+        'assets': 'Assets',
+        'supplies': 'Supplies',
+        'project_detail': 'Project Details',
+        'view_list': 'List Details',
+        'asset_detail': 'Asset Details',
+        'manage_users': 'Users'
+    }
+    page_title = endpoints.get(request.endpoint, '')
+    
+    return dict(
+        current_user=current_user, 
+        all_users=all_users, 
+        all_projects=all_projects, 
+        today=get_local_now().date(), 
+        unproc_inbox=unproc_inbox,
+        page_title=page_title
+    )
 
 @app.before_request
 def check_setup():
@@ -1692,8 +1832,8 @@ def check_setup():
             vw.supplies.extend([oil, oil_filter])
             db.session.commit()
 
-            vw_oil = MaintenanceSchedule(asset_id=vw.id, name="Synthetic Oil Change", frequency_days=180, next_due=datetime.utcnow() + timedelta(days=30))
-            drone_bat = MaintenanceSchedule(asset_id=drone.id, name="Replace Battery", frequency_days=365, next_due=datetime.utcnow() - timedelta(days=5))
+            vw_oil = MaintenanceSchedule(asset_id=vw.id, name="Synthetic Oil Change", frequency_days=180, next_due=get_local_now() + timedelta(days=30))
+            drone_bat = MaintenanceSchedule(asset_id=drone.id, name="Replace Battery", frequency_days=365, next_due=get_local_now() - timedelta(days=5))
             db.session.add_all([vw_oil, drone_bat])
             db.session.commit()
 
@@ -1707,7 +1847,7 @@ def check_setup():
 
 def calculate_next_due_date(current_date, interval, unit):
     if not current_date:
-        current_date = datetime.utcnow()
+        current_date = get_local_now()
     if unit == 'days':
         return current_date + timedelta(days=interval)
     elif unit == 'weeks':
@@ -1756,7 +1896,7 @@ def toggle_project_status(id):
     project = db.session.get(Project, id)
     if project.status == 'active':
         project.status = 'completed'
-        project.completed_at = datetime.utcnow()
+        project.completed_at = get_local_now()
         flash("Project marked as completed!", "success")
     else:
         project.status = 'active'
@@ -1837,7 +1977,7 @@ def process_inbox(item_id):
         recur_unit=request.form.get('recur_unit') if is_recurring else 'days'
     )
     db.session.add(action)
-    inbox_item.processed_at = datetime.utcnow()
+    inbox_item.processed_at = get_local_now()
     db.session.commit()
     
     if status == 'someday':
@@ -1893,12 +2033,12 @@ def update_status(item_id):
     if new_status in ['ready', 'in_progress', 'blocked', 'done']:
         action.status = new_status
         if new_status == 'done': 
-            action.completed_at = datetime.utcnow()
+            action.completed_at = get_local_now()
             action.owner_user_id = session.get('user_id') 
             log_activity(session.get('user_id'), 'completed_task', f"Finished: {action.title}")
             
             if action.is_recurring:
-                new_due = calculate_next_due_date(action.due_date or datetime.utcnow(), action.recur_interval, action.recur_unit)
+                new_due = calculate_next_due_date(action.due_date or get_local_now(), action.recur_interval, action.recur_unit)
                 new_action = ActionItem(
                     household_id=action.household_id,
                     title=action.title,
@@ -1938,14 +2078,14 @@ def review():
 
 @app.route('/dashboard')
 def dashboard():
-    today = datetime.utcnow().date()
+    today = get_local_now().date()
     activity = ActivityLog.query.filter(ActivityLog.timestamp >= today).order_by(ActivityLog.timestamp.desc()).all()
     completions = ActionItem.query.filter(ActionItem.completed_at >= today).count()
     
     hid = session.get('household_id')
     active_lists_count = HouseholdList.query.filter_by(household_id=hid, is_deleted=False).count() if hid else 0
     
-    purge_cutoff = datetime.utcnow() - timedelta(days=30)
+    purge_cutoff = get_local_now() - timedelta(days=30)
     purgeable_lists_count = HouseholdList.query.filter(HouseholdList.household_id == hid, HouseholdList.is_deleted == True, HouseholdList.deleted_at <= purge_cutoff).count() if hid else 0
     purgeable_items_count = ListItem.query.filter(ListItem.household_id == hid, ListItem.is_deleted == True, ListItem.deleted_at <= purge_cutoff).count() if hid else 0
     
@@ -1968,7 +2108,7 @@ def leaderboard():
         key = (item.owner_user_id, d_str)
         daily_scores[key] = daily_scores.get(key, 0) + item.complexity_fib
 
-    today_str = date.today().isoformat()
+    today_str = get_local_now().date().isoformat()
     todays_points = [{'name': users.get(uid, 'Unknown'), 'points': pts}
                      for (uid, d_str), pts in daily_scores.items() if d_str == today_str]
     todays_points.sort(key=lambda x: x['points'], reverse=True)
@@ -1984,7 +2124,7 @@ def leaderboard():
 @app.route('/calendar')
 @app.route('/calendar/<int:year>/<int:month>')
 def calendar_view(year=None, month=None):
-    today = date.today()
+    today = get_local_now().date()
     if year is None or month is None:
         year = today.year
         month = today.month
@@ -2045,7 +2185,7 @@ def export_data():
         status=200,
         mimetype='application/json'
     )
-    response.headers["Content-Disposition"] = f"attachment; filename=gtd_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+    response.headers["Content-Disposition"] = f"attachment; filename=gtd_backup_{get_local_now().strftime('%Y%m%d_%H%M%S')}.json"
     return response
 
 @app.route('/import', methods=['POST'])
@@ -2097,7 +2237,7 @@ def import_data():
 def admin_purge():
     user = db.session.get(User, session.get('user_id'))
     if user and user.role == 'admin':
-        cutoff = datetime.utcnow() - timedelta(days=30)
+        cutoff = get_local_now() - timedelta(days=30)
         items_deleted = ListItem.query.filter(ListItem.is_deleted == True, ListItem.deleted_at <= cutoff).delete()
         lists_deleted = HouseholdList.query.filter(HouseholdList.is_deleted == True, HouseholdList.deleted_at <= cutoff).delete()
         db.session.commit()
@@ -2171,7 +2311,7 @@ def edit_list(id):
 def delete_list(id):
     household_list = db.session.get(HouseholdList, id)
     household_list.is_deleted = True
-    household_list.deleted_at = datetime.utcnow()
+    household_list.deleted_at = get_local_now()
     db.session.commit()
     flash(f"List '{household_list.name}' deleted.", "success")
     return redirect(url_for('manage_lists'))
@@ -2215,7 +2355,7 @@ def delete_list_item(item_id):
     item = db.session.get(ListItem, item_id)
     if item:
         item.is_deleted = True
-        item.deleted_at = datetime.utcnow()
+        item.deleted_at = get_local_now()
         db.session.commit()
         return jsonify(success=True)
     return jsonify(success=False), 404
@@ -2295,7 +2435,7 @@ def asset_toggle_status(id):
     if asset.status == 'available':
         asset.status = 'checked_out'
         asset.checked_out_by_id = session.get('user_id')
-        asset.checked_out_at = datetime.utcnow()
+        asset.checked_out_at = get_local_now()
         log_activity(session.get('user_id'), 'checkout_asset', f"Checked out: {asset.name}")
     else:
         asset.status = 'available'
@@ -2310,7 +2450,7 @@ def add_maintenance_schedule(asset_id):
         asset_id=asset_id,
         name=request.form.get('name'),
         frequency_days=int(request.form.get('frequency_days')),
-        next_due=datetime.utcnow() + timedelta(days=int(request.form.get('frequency_days')))
+        next_due=get_local_now() + timedelta(days=int(request.form.get('frequency_days')))
     )
     db.session.add(sched)
     db.session.commit()
@@ -2324,8 +2464,8 @@ def log_maintenance(asset_id, sched_id):
     
     db.session.add(Expense(asset_id=asset_id, amount=amount, description=desc, is_maintenance=True, maintenance_schedule_id=sched.id))
     
-    sched.last_completed = datetime.utcnow()
-    sched.next_due = datetime.utcnow() + timedelta(days=sched.frequency_days)
+    sched.last_completed = get_local_now()
+    sched.next_due = get_local_now() + timedelta(days=sched.frequency_days)
     
     db.session.commit()
     log_activity(session.get('user_id'), 'logged_maintenance', f"Performed {sched.name} on Asset #{asset_id}")
