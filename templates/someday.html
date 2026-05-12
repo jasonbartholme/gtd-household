@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="h4 mb-0 text-secondary fw-bold" data-bs-toggle="tooltip" title="Ideas you want to do, but not right now. Review these weekly and activate them when you have capacity." style="cursor: help;">Someday / Maybe Incubator ℹ️</h2>
+            <p class="text-muted small mt-1">These items do not appear on your active Kanban board.</p>
+        </div>
+        <a href="{{ url_for('inbox') }}" class="btn btn-secondary btn-sm">+ Add Idea</a>
+    </div>
+
+    <div class="row g-3">
+        {% for item in items %}
+        <div class="col-md-4">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-body d-flex flex-column">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge bg-secondary-subtle text-secondary small text-capitalize">{{ item.item_type }}</span>
+                        <span class="text-muted small">Fib: {{ item.complexity_fib }}</span>
+                    </div>
+                    <h6 class="card-title text-light mb-1">
+                        <a href="{{ url_for('edit_action', id=item.id) }}" class="text-decoration-none text-light">{{ item.title }}</a>
+                    </h6>
+                    <div class="small mb-3">
+                        {% if item.project %}<span class="badge border border-primary text-primary me-1">📁 {{ item.project.name }}</span>{% endif %}
+                        {% if item.context %}<span class="badge border border-secondary text-secondary me-1">@{{ item.context }}</span>{% endif %}
+                    </div>
+                    {% if item.description %}
+                        <p class="card-text text-muted small mb-3">{{ item.description }}</p>
+                    {% endif %}
+                    
+                    <form action="{{ url_for('activate_someday', id=item.id) }}" method="POST" class="mt-auto">
+                        <button type="submit" class="btn btn-outline-info btn-sm w-100">Activate (Move to Ready)</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center py-5">
+            <h5 class="text-muted">No incubating ideas.</h5>
+            <p class="text-muted small">Got a crazy idea for the future? Send it to the Someday list from your Inbox!</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endblock %}

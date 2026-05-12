@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+    {% block content %}
+    <div class="text-center py-4"><h2 class="text-info fw-bold mb-4" data-bs-toggle="tooltip" title="The Weekly Review is the key to GTD. Get clear, get current, and get creative. Empty your inbox and review active lists." style="cursor: help;">Weekly Review ℹ️</h2>
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
+                    <h5 class="text-primary" data-bs-toggle="tooltip" title="Process everything to zero. Decide what each item is and what the next action is." style="cursor: help;">Inbox ({{ inbox_count }}) ℹ️</h5>
+                    <a href="{{ url_for('inbox') }}" class="btn btn-sm btn-primary px-4">Process</a>
+                </div>
+                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
+                    <h5 class="text-secondary" data-bs-toggle="tooltip" title="Review ideas you put on hold. Are you ready to activate any of them?" style="cursor: help;">Someday / Maybe ({{ someday_count }}) ℹ️</h5>
+                    <a href="{{ url_for('someday_view') }}" class="btn btn-sm btn-secondary px-4">Review Ideas</a>
+                </div>
+                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
+                    <h5 class="text-warning" data-bs-toggle="tooltip" title="Review items blocked by others. Follow up with them if necessary!" style="cursor: help;">Waiting On ℹ️</h5>
+                    <ul class="list-group list-group-flush">
+                        {% for item in waiting_items %}
+                        <li class="list-group-item bg-dark text-light border-secondary small">{{ item.title }}</li>
+                        {% else %}
+                        <li class="list-group-item bg-dark text-muted border-secondary small">No pending items.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
+                    <h5 class="text-info">Active Recurring Chores</h5>
+                    <ul class="list-group list-group-flush">
+                        {% for item in recurring_items %}
+                        <li class="list-group-item bg-dark text-light border-secondary small d-flex justify-content-between align-items-center">
+                            <span><a href="{{ url_for('edit_action', id=item.id) }}" class="text-info text-decoration-none">{{ item.title }}</a></span>
+                            <span class="badge bg-secondary">Every {{ item.recur_interval }} {{ item.recur_unit }}</span>
+                        </li>
+                        {% else %}
+                        <li class="list-group-item bg-dark text-muted border-secondary small">No recurring items setup.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}

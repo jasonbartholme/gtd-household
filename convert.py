@@ -1,0 +1,37 @@
+import os
+
+# Import the TEMPLATES dictionary directly from your current app.py
+try:
+    from app import TEMPLATES
+except ImportError:
+    print("Error: Could not find 'TEMPLATES' in app.py. Make sure this script is in the same folder as app.py.")
+    exit(1)
+
+
+def main():
+    # 1. Create the templates directory if it doesn't exist
+    templates_dir = 'templates'
+    if not os.path.exists(templates_dir):
+        os.makedirs(templates_dir)
+        print(f"Created directory: {templates_dir}/")
+
+    # 2. Iterate through the dictionary and create the HTML files
+    for filename, html_content in TEMPLATES.items():
+        filepath = os.path.join(templates_dir, filename)
+
+        # Write the content, stripping leading/trailing whitespace to keep it clean
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(html_content.strip() + "\n")
+
+        print(f"✔️ Extracted: {filepath}")
+
+    print("\n✅ Extraction complete!")
+    print("\nNext steps for app.py:")
+    print("1. Delete the giant TEMPLATES = { ... } dictionary.")
+    print("2. Delete the line: app.jinja_loader = DictLoader(TEMPLATES)")
+    print("3. Remove 'DictLoader' from your imports.")
+    print("Flask will now automatically route to your new templates/ folder!")
+
+
+if __name__ == "__main__":
+    main()

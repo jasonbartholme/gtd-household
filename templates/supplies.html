@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 mb-0">Supplies</h2>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplyModal">+ Add</button>
+    </div>
+    <div class="row g-3">
+        {% for supply in supplies %}
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary p-3 text-center shadow-sm h-100">
+                <h6>{{ supply.name }}</h6>
+                <p class="text-muted small mb-1">{{ supply.context or 'General' }}</p>
+                {% if supply.store_name %}
+                    <p class="text-warning small mb-1"><i class="bi bi-shop"></i> {{ supply.store_name }}</p>
+                {% endif %}
+                <h2 class="{{ 'text-danger' if supply.quantity <= supply.reorder_threshold else 'text-success' }}">{{ supply.quantity }}</h2>
+                <div class="d-grid gap-2 mt-auto">
+                    <form action="{{ url_for('use_supply', id=supply.id) }}" method="POST"><button class="btn btn-sm btn-outline-info w-100">Use</button></form>
+                    {% if supply.purchase_url %}
+                        <a href="{{ supply.purchase_url }}" target="_blank" class="btn btn-sm btn-link text-info text-decoration-none small">Buy Online</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Add Supply Modal -->
+    <div class="modal fade" id="addSupplyModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <form action="{{ url_for('add_supply') }}" method="POST">
+                    <div class="modal-header border-secondary"><h5 class="modal-title">New Supply Item</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body">
+                        <div class="mb-3"><label class="small text-muted">Item Name</label><input type="text" name="name" class="form-control bg-dark text-light border-secondary" required></div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6"><label class="small text-muted">Initial Qty</label><input type="number" name="quantity" class="form-control bg-dark text-light border-secondary" value="1"></div>
+                            <div class="col-6"><label class="small text-muted">Reorder Threshold</label><input type="number" name="threshold" class="form-control bg-dark text-light border-secondary" value="1"></div>
+                        </div>
+                        <div class="mb-3"><label class="small text-muted">Context (Location in House)</label><input type="text" name="context" class="form-control bg-dark text-light border-secondary" placeholder="Kitchen, Garage..."></div>
+                        <div class="mb-3"><label class="small text-muted">Purchase URL</label><input type="url" name="purchase_url" class="form-control bg-dark text-light border-secondary" placeholder="https://amazon.com/..."></div>
+                        <div class="mb-3"><label class="small text-muted">Store/Location (Where to buy)</label><input type="text" name="store_name" class="form-control bg-dark text-light border-secondary" placeholder="e.g. Home Depot, Costco"></div>
+                        <hr class="border-secondary">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="auto_add_to_shopping" id="autoAdd" checked>
+                            <label class="form-check-label small" for="autoAdd">
+                                Auto-add to Shopping List when stock is low
+                            </label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="add_to_list_now" id="addNow">
+                            <label class="form-check-label small text-warning" for="addNow">
+                                Add to General Shopping List immediately
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary"><button class="btn btn-success w-100">Add Supply</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endblock %}

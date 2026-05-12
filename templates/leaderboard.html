@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 mb-0 text-warning fw-bold">🏆 Chorenado Leaderboard</h2>
+    </div>
+
+    <div class="row mb-4">
+        {% for tp in todays_points %}
+        <div class="col-md-4 mb-3">
+            <div class="card bg-dark border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h5 class="text-muted small fw-bold">TODAY'S CHORENADO CHAMP</h5>
+                    <h1 class="display-3 text-warning fw-bold">{{ tp.points }}</h1>
+                    <span class="badge bg-secondary fs-6">{{ tp.name }}</span>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <div class="card bg-dark border-secondary shadow-sm">
+                <div class="card-body text-center py-5">
+                    <h5 class="text-muted">No Chorenado points earned today yet!</h5>
+                    <p class="text-muted small">Move some tasks to 'Done' to get on the board.</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-info small fw-bold">TOP DAILY CHORENADO CHAMP POINTS</div>
+                <div class="card-body p-0">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead><tr><th>Rank</th><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
+                        <tbody>
+                            {% for score in top_scores %}
+                            <tr>
+                                <td class="text-muted">#{{ loop.index }}</td>
+                                <td>{{ score.name }}</td>
+                                <td class="small">{{ score.date }}</td>
+                                <td class="text-end text-warning fw-bold">{{ score.points }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center text-muted py-3">No data available.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100">
+                <div class="card-header border-secondary text-success small fw-bold">MOST RECENT CHORENADO POINTS</div>
+                <div class="card-body p-0">
+                    <table class="table table-dark table-striped mb-0">
+                        <thead><tr><th>Person</th><th>Date</th><th class="text-end">Points</th></tr></thead>
+                        <tbody>
+                            {% for score in recent_scores %}
+                            <tr>
+                                <td>{{ score.name }}</td>
+                                <td class="small">{{ score.date }}</td>
+                                <td class="text-end text-success fw-bold">{{ score.points }}</td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">No data available.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}

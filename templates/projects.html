@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="h4 mb-0 text-info fw-bold" data-bs-toggle="tooltip" title="GTD Rule: Any outcome that requires more than one step is a Project. Keep them here, and put their next physical action on the Kanban board!" style="cursor: help;">Active Projects ℹ️</h2>
+        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addProjectModal">+ New Project</button>
+    </div>
+    <div class="row g-3">
+        {% for proj in projects %}
+        <div class="col-md-6">
+            <div class="card bg-dark border-secondary shadow-sm h-100 card-hover">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title text-light mb-0"><a href="{{ url_for('project_detail', id=proj.id) }}" class="text-decoration-none text-info">{{ proj.name }}</a></h5>
+                        <span class="badge {{ 'bg-success' if proj.status == 'completed' else 'bg-primary' }}">{{ proj.status|title }}</span>
+                    </div>
+                    <p class="text-muted small mb-3">{{ proj.description[:100] if proj.description else 'No description provided.' }}</p>
+                    
+                    {% set total_actions = proj.actions|length %}
+                    {% set done_actions = proj.actions|selectattr('status', 'equalto', 'done')|list|length %}
+                    {% set percent = (done_actions / total_actions * 100)|round|int if total_actions > 0 else 0 %}
+                    
+                    <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
+                        <span>Progress</span>
+                        <span>{{ done_actions }} / {{ total_actions }} Tasks</span>
+                    </div>
+                    <div class="progress" style="height: 6px; background-color: #373b3e;">
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ percent }}%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12 text-center py-5">
+            <h5 class="text-muted">No active projects.</h5>
+            <p class="text-muted small">Got a big goal? Break it down into a Project!</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Add Project Modal -->
+    <div class="modal fade" id="addProjectModal" tabindex="-1">
+        <div class="modal-dialog"><div class="modal-content bg-dark text-light border-secondary">
+            <form action="{{ url_for('add_project') }}" method="POST">
+                <div class="modal-header border-secondary"><h5 class="modal-title">New Project</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="small text-muted">Project Name</label><input type="text" name="name" class="form-control bg-dark text-light border-secondary" required placeholder="E.g., Winterize the House"></div>
+                    <div class="mb-3"><label class="small text-muted">Description & Desired Outcome</label><textarea name="description" class="form-control bg-dark text-light border-secondary" rows="3"></textarea></div>
+                </div>
+                <div class="modal-footer border-secondary"><button class="btn btn-success w-100">Create Project</button></div>
+            </form>
+        </div></div>
+    </div>
+    {% endblock %}
