@@ -1,15 +1,16 @@
-import os
 import calendar
+import os
 from datetime import datetime, date, timedelta
 from flask import Flask, request, redirect, url_for, session, flash, render_template, jsonify
-from flask_sqlalchemy import SQLAlchemygt
+from flask_sqlalchemy import SQLAlchemy
 from zoneinfo import ZoneInfo
 
 # ==========================================
 # 1. APP CONFIGURATION
 # ==========================================
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'lan-local-secret-key-m0dify-in-prod'
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+app = Flask(__name__, template_folder=template_dir)
+app.config['SECRET_KEY'] = 'lan-local-secret-key-modifqy-in-prod'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gtd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
@@ -230,40 +231,51 @@ def inject_global_data():
         page_title=page_title
     )
 
+def setup_db():
+    # Ensure the database tables exist and seed minimal data once per process
+    db.create_all()
+    if not Household.query.first():
+        h = Household(name="Local Household")
+        db.session.add(h)
+        db.session.commit()
+        u1 = User(name="Admin", role="admin", household_id=h.id)
+        u2 = User(name="Member", role="member", household_id=h.id)
+        db.session.add_all([u1, u2])
+        db.session.commit()
+        
+        p1 = Project(household_id=h.id, name="Garage Organization", description="Clean out the garage before winter so we can park both cars inside.")
+        db.session.add(p1)
+        
+        drone = Asset(household_id=h.id, name="Drone Kit", category="electronics", context="Office", power_source="Battery", battery_type="Proprietary Lipo", battery_lifespan_days=365)
+        vw = Asset(household_id=h.id, name="VW Wagen", category="vehicle", context="Garage", power_source="Gas")
+        cleaner = Supply(household_id=h.id, name="Toilet Cleaner", quantity=1, reorder_threshold=0, context="Kitchen pantry")
+        
+        oil = Supply(household_id=h.id, name="Synthetic Oil 5W-30", quantity=2, reorder_threshold=1, context="Garage")
+        oil_filter = Supply(household_id=h.id, name="Oil Filter", quantity=1, reorder_threshold=0, context="Garage")
+        
+        db.session.add_all([drone, vw, cleaner, oil, oil_filter])
+        vw.supplies.extend([oil, oil_filter])
+        db.session.commit()
+
+        vw_oil = MaintenanceSchedule(asset_id=vw.id, name="Synthetic Oil Change", frequency_days=180, next_due=get_local_now() + timedelta(days=30))
+        drone_bat = MaintenanceSchedule(asset_id=drone.id, name="Replace Battery", frequency_days=365, next_due=get_local_now() - timedelta(days=5))
+        db.session.add_all([vw_oil, drone_bat])
+        db.session.commit()
+
+    app._setup_done = True
+
+
+# Run DB setup at import time to ensure tables exist for routes and template rendering
+try:
+    setup_db()
+except Exception:
+    # If app context isn't available yet, defer until first request
+    pass
+
+
 @app.before_request
-def check_setup():
-    if not hasattr(app, '_setup_done'):
-        db.create_all()
-        if not Household.query.first():
-            h = Household(name="Local Household")
-            db.session.add(h)
-            db.session.commit()
-            u1 = User(name="Admin", role="admin", household_id=h.id)
-            u2 = User(name="Member", role="member", household_id=h.id)
-            db.session.add_all([u1, u2])
-            db.session.commit()
-            
-            p1 = Project(household_id=h.id, name="Garage Organization", description="Clean out the garage before winter so we can park both cars inside.")
-            db.session.add(p1)
-            
-            drone = Asset(household_id=h.id, name="Drone Kit", category="electronics", context="Office", power_source="Battery", battery_type="Proprietary Lipo", battery_lifespan_days=365)
-            vw = Asset(household_id=h.id, name="VW Wagen", category="vehicle", context="Garage", power_source="Gas")
-            cleaner = Supply(household_id=h.id, name="Toilet Cleaner", quantity=1, reorder_threshold=0, context="Kitchen pantry")
-            
-            oil = Supply(household_id=h.id, name="Synthetic Oil 5W-30", quantity=2, reorder_threshold=1, context="Garage")
-            oil_filter = Supply(household_id=h.id, name="Oil Filter", quantity=1, reorder_threshold=0, context="Garage")
-            
-            db.session.add_all([drone, vw, cleaner, oil, oil_filter])
-            vw.supplies.extend([oil, oil_filter])
-            db.session.commit()
-
-            vw_oil = MaintenanceSchedule(asset_id=vw.id, name="Synthetic Oil Change", frequency_days=180, next_due=get_local_now() + timedelta(days=30))
-            drone_bat = MaintenanceSchedule(asset_id=drone.id, name="Replace Battery", frequency_days=365, next_due=get_local_now() - timedelta(days=5))
-            db.session.add_all([vw_oil, drone_bat])
-            db.session.commit()
-
-        app._setup_done = True
-
+def ensure_session_user():
+    # Keep session population separate from DB setup so requests don't fail if DB was empty
     if 'user_id' not in session and request.endpoint not in ['static', None]:
         first_user = User.query.first()
         if first_user:
@@ -291,7 +303,7 @@ def calculate_next_due_date(current_date, interval, unit):
 def kanban():
     hid = session.get('household_id')
     items = ActionItem.query.filter(ActionItem.household_id==hid, ActionItem.status != 'someday').order_by(ActionItem.created_at.desc()).all()
-    return render_template('kanban.html', items=items)
+    return render_template("kanban.html", items=items)
 
 @app.route('/projects')
 def manage_projects():
