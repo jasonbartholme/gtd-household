@@ -232,7 +232,6 @@ def inject_global_data():
     )
 first_run = True
 
-@app.before_first_request
 def setup_db():
     # Ensure the database tables exist and seed minimal data once per process
     db.create_all()
@@ -1003,4 +1002,6 @@ def switch_user():
     return redirect(request.referrer or url_for('kanban'))
 
 if __name__ == '__main__':
+    with app.app_context():
+        setup_db()
     app.run(host='0.0.0.0', port=5000, debug=True)
