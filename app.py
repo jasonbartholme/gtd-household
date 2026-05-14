@@ -552,10 +552,12 @@ def dashboard():
     purgeable_lists_count = HouseholdList.query.filter(HouseholdList.household_id == hid, HouseholdList.is_deleted == True, HouseholdList.deleted_at <= purge_cutoff).count() if hid else 0
     purgeable_items_count = ListItem.query.filter(ListItem.household_id == hid, ListItem.is_deleted == True, ListItem.deleted_at <= purge_cutoff).count() if hid else 0
 
+    health = get_health_status()
     return render_template('dashboard.html', activity=activity, today_completions=completions,
                            active_lists_count=active_lists_count,
                            purgeable_lists_count=purgeable_lists_count,
-                           purgeable_items_count=purgeable_items_count)
+                           purgeable_items_count=purgeable_items_count,
+                           health=health)
 
 @app.route('/leaderboard')
 def leaderboard():
