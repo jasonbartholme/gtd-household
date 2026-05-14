@@ -292,6 +292,43 @@ def calculate_next_due_date(current_date, interval, unit):
 # ==========================================
 # 5. ROUTES
 # ==========================================
+
+# ========== Healthcheck helper & endpoint ==========
+def get_health_status():
+    """Return a simple health payload: DB connection and basic counts."""
+    try:
+        # quick raw query to ensure DB engine responds
+        db.session.execute('SELECT 1')
+
+        users_count = User.query.count()
+        actions_count = ActionItem.query.count()
+        unproc_inbox = InboxItem.query.filter_by(processed_at=None).count()
+        last_activity = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).first()
+        last_activity_ts = last_activity.timestamp.isoformat() if last_activity else None
+
+        return {
+            'status': 'ok',
+            'db_connected': True,
+            'counts': {
+                'users': users_count,
+                'actions': actions_count,
+                'unprocessed_inbox': unproc_inbox
+            },
+            'last_activity': last_activity_ts
+        }
+    except Exception as e:
+        return {
+            'status': 'error',
+            'db_connected': False,
+            'error': str(e)
+        }
+
+
+@app.route('/health')
+def health():
+    return jsonify(get_health_status())
+
+
 @app.route('/')
 def kanban():
     hid = session.get('household_id')
