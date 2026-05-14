@@ -113,6 +113,27 @@
                 var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
                     return new bootstrap.Tooltip(tooltipTriggerEl)
                 })
+
+                // Auto-dismiss flash alerts after 5 seconds, but allow immediate close via click
+                var AUTO_DISMISS_MS = 5000;
+                document.querySelectorAll('.alert-dismissible').forEach(function(alertEl){
+                    try{
+                        var bsAlert = bootstrap.Alert.getOrCreateInstance(alertEl);
+                        var timer = setTimeout(function(){ bsAlert.close(); }, AUTO_DISMISS_MS);
+
+                        // Clear timer if user manually closes via close button
+                        var closeBtn = alertEl.querySelector('[data-bs-dismiss="alert"]');
+                        if (closeBtn) {
+                            closeBtn.addEventListener('click', function(){ clearTimeout(timer); });
+                        }
+
+                        // Clear timer when alert is closed programmatically or otherwise
+                        alertEl.addEventListener('closed.bs.alert', function(){ clearTimeout(timer); });
+                    } catch (e) {
+                        // non-fatal; if bootstrap isn't available for some reason, ignore
+                        console.warn('Auto-dismiss setup failed for alert:', e);
+                    }
+                });
             });
         </script>
         {% block scripts %}{% endblock %}
