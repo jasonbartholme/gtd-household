@@ -26,6 +26,32 @@
             </div>
             
             {% if current_user and current_user.role == 'admin' %}
+            <div class="card bg-dark border-secondary shadow-sm mb-4">
+                <div class="card-header border-secondary text-success small fw-bold">SYSTEM HEALTH</div>
+                <div class="card-body">
+                    {% if health and health.status == 'ok' %}
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-success me-2">OK</span>
+                        <small class="text-muted">All systems nominal</small>
+                    </div>
+                    <div class="small text-muted">
+                        <div class="d-flex justify-content-between"><span>Users</span><span class="text-light fw-bold">{{ health.counts.users }}</span></div>
+                        <div class="d-flex justify-content-between"><span>Actions</span><span class="text-light fw-bold">{{ health.counts.actions }}</span></div>
+                        <div class="d-flex justify-content-between"><span>Unprocessed Inbox</span><span class="text-light fw-bold">{{ health.counts.unprocessed_inbox }}</span></div>
+                        <div class="d-flex justify-content-between"><span>Last Activity</span><span class="text-light fw-bold">{{ health.last_activity or 'none' }}</span></div>
+                    </div>
+                    {% else %}
+                    <div class="d-flex align-items-center mb-2">
+                        <span class="badge bg-danger me-2">ERROR</span>
+                        <small class="text-muted">Database or service error</small>
+                    </div>
+                    <div class="small text-danger">{{ health.error if health and health.error else 'Unknown error' }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if current_user and current_user.role == 'admin' %}
             <div class="card bg-dark border-danger shadow-sm mb-4">
                 <div class="card-header border-danger text-danger small fw-bold">ADMIN ACTIONS</div>
                 <div class="card-body">
