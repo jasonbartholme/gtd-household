@@ -298,7 +298,8 @@ def get_health_status():
     """Return a simple health payload: DB connection and basic counts."""
     try:
         # quick raw query to ensure DB engine responds
-        db.session.execute('SELECT 1')
+        from sqlalchemy import text
+        db.session.execute(text('SELECT 1'))
 
         users_count = User.query.count()
         actions_count = ActionItem.query.count()
