@@ -8,8 +8,8 @@ from zoneinfo import ZoneInfo
 # ==========================================
 # 1. APP CONFIGURATION
 # ==========================================
-template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
-app = Flask(__name__, template_folder=template_dir)
+# template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+app = Flask(__name__)
 app.config['SECRET_KEY'] = 'lan-local-secret-key-modifqy-in-prod'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gtd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -44,9 +44,9 @@ class Project(db.Model):
     status = db.Column(db.String(50), default='active') # active, completed
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
-    
+
     actions = db.relationship('ActionItem', backref='project', lazy=True)
-    
+
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
@@ -87,8 +87,8 @@ class ActionItem(db.Model):
     owner_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
-    due_date = db.Column(db.DateTime, nullable=True) 
-    
+    due_date = db.Column(db.DateTime, nullable=True)
+
     is_recurring = db.Column(db.Boolean, default=False)
     recur_interval = db.Column(db.Integer, default=1)
     recur_unit = db.Column(db.String(20)) # days, weeks, months
@@ -118,7 +118,7 @@ class Asset(db.Model):
     checked_out_at = db.Column(db.DateTime, nullable=True)
     qr_code_ref = db.Column(db.String(100), unique=True, nullable=True)
     purchase_url = db.Column(db.String(500))
-    
+
     power_source = db.Column(db.String(50))
     battery_type = db.Column(db.String(50))
     battery_lifespan_days = db.Column(db.Integer, nullable=True)
@@ -130,7 +130,7 @@ class Asset(db.Model):
 class MaintenanceSchedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=False)
-    name = db.Column(db.String(100), nullable=False) 
+    name = db.Column(db.String(100), nullable=False)
     frequency_days = db.Column(db.Integer, nullable=False)
     last_completed = db.Column(db.DateTime, nullable=True)
     next_due = db.Column(db.DateTime, nullable=True)
@@ -141,7 +141,7 @@ class Expense(db.Model):
     amount = db.Column(db.Float, nullable=False)
     description = db.Column(db.String(200))
     date = db.Column(db.DateTime, default=get_local_now)
-    
+
     is_maintenance = db.Column(db.Boolean, default=False)
     maintenance_schedule_id = db.Column(db.Integer, db.ForeignKey('maintenance_schedule.id'), nullable=True)
 
@@ -154,7 +154,7 @@ class Supply(db.Model):
     auto_add_to_shopping = db.Column(db.Boolean, default=True)
     context = db.Column(db.String(100))
     purchase_url = db.Column(db.String(500))
-    store_name = db.Column(db.String(100)) 
+    store_name = db.Column(db.String(100))
 
 class HouseholdList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -162,12 +162,12 @@ class HouseholdList(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    tags = db.Column(db.String(200), nullable=True) 
+    tags = db.Column(db.String(200), nullable=True)
     location_context = db.Column(db.String(100), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    
+
     items = db.relationship('ListItem', backref='list', lazy=True, cascade="all, delete-orphan", order_by="ListItem.sort_order")
     owner = db.relationship('User', backref='lists_owned', lazy=True)
 
@@ -195,13 +195,13 @@ def inject_global_data():
     current_user_id = session.get('user_id')
     current_user = db.session.get(User, current_user_id) if current_user_id else None
     all_users = User.query.all()
-    
+
     hid = session.get('household_id')
     all_projects = Project.query.filter_by(household_id=hid, status='active').all() if hid else []
-    
+
     # Global unprocessed inbox count
     unproc_inbox = InboxItem.query.filter_by(household_id=hid, processed_at=None).count() if hid else 0
-    
+
     # Dynamic Page Titles
     endpoints = {
         'dashboard': 'Dashboard',
@@ -221,16 +221,18 @@ def inject_global_data():
         'manage_users': 'Users'
     }
     page_title = endpoints.get(request.endpoint, '')
-    
+
     return dict(
-        current_user=current_user, 
-        all_users=all_users, 
-        all_projects=all_projects, 
-        today=get_local_now().date(), 
+        current_user=current_user,
+        all_users=all_users,
+        all_projects=all_projects,
+        today=get_local_now().date(),
         unproc_inbox=unproc_inbox,
         page_title=page_title
     )
+first_run = True
 
+@app.before_first_request
 def setup_db():
     # Ensure the database tables exist and seed minimal data once per process
     db.create_all()
@@ -242,17 +244,17 @@ def setup_db():
         u2 = User(name="Member", role="member", household_id=h.id)
         db.session.add_all([u1, u2])
         db.session.commit()
-        
+
         p1 = Project(household_id=h.id, name="Garage Organization", description="Clean out the garage before winter so we can park both cars inside.")
         db.session.add(p1)
-        
+
         drone = Asset(household_id=h.id, name="Drone Kit", category="electronics", context="Office", power_source="Battery", battery_type="Proprietary Lipo", battery_lifespan_days=365)
         vw = Asset(household_id=h.id, name="VW Wagen", category="vehicle", context="Garage", power_source="Gas")
         cleaner = Supply(household_id=h.id, name="Toilet Cleaner", quantity=1, reorder_threshold=0, context="Kitchen pantry")
-        
+
         oil = Supply(household_id=h.id, name="Synthetic Oil 5W-30", quantity=2, reorder_threshold=1, context="Garage")
         oil_filter = Supply(household_id=h.id, name="Oil Filter", quantity=1, reorder_threshold=0, context="Garage")
-        
+
         db.session.add_all([drone, vw, cleaner, oil, oil_filter])
         vw.supplies.extend([oil, oil_filter])
         db.session.commit()
@@ -263,14 +265,6 @@ def setup_db():
         db.session.commit()
 
     app._setup_done = True
-
-
-# Run DB setup at import time to ensure tables exist for routes and template rendering
-try:
-    setup_db()
-except Exception:
-    # If app context isn't available yet, defer until first request
-    pass
 
 
 @app.before_request
@@ -377,9 +371,9 @@ def add_inbox_bulk():
     items = [line.strip() for line in bulk_text.split('\n') if line.strip()]
     for item_title in items:
         db.session.add(InboxItem(
-            household_id=session['household_id'], 
+            household_id=session['household_id'],
             captured_by_user_id=session['user_id'],
-            title=item_title, 
+            title=item_title,
             context=context
         ))
     db.session.commit()
@@ -391,19 +385,19 @@ def process_inbox(item_id):
     inbox_item = db.session.get(InboxItem, item_id)
     due_date_str = request.form.get('due_date')
     due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
-    
+
     interval = request.form.get('recur_interval')
     is_recurring = bool(interval and int(interval) > 0)
-    
+
     project_id = request.form.get('project_id')
     status = request.form.get('status', 'ready')
 
     action = ActionItem(
-        household_id=session['household_id'], 
+        household_id=session['household_id'],
         title=request.form.get('title'),
-        description=request.form.get('description'), 
+        description=request.form.get('description'),
         item_type=request.form.get('item_type'),
-        complexity_fib=int(request.form.get('complexity_fib')), 
+        complexity_fib=int(request.form.get('complexity_fib')),
         context=request.form.get('context'),
         project_id=int(project_id) if project_id else None,
         status=status,
@@ -416,12 +410,12 @@ def process_inbox(item_id):
     db.session.add(action)
     inbox_item.processed_at = get_local_now()
     db.session.commit()
-    
+
     if status == 'someday':
         flash("Action sent to Someday incubator.", "info")
     else:
         flash("Action added to board.", "success")
-        
+
     return redirect(url_for('kanban'))
 
 @app.route('/action/<int:id>/edit', methods=['GET', 'POST'])
@@ -434,28 +428,23 @@ def edit_action(id):
         action.context = request.form.get('context')
         action.description = request.form.get('description')
         action.status = request.form.get('status')
-        
         project_id = request.form.get('project_id')
         action.project_id = int(project_id) if project_id else None
-        
         action.is_recurring = 'is_recurring' in request.form
         action.recur_interval = int(request.form.get('recur_interval') or 1)
         action.recur_unit = request.form.get('recur_unit')
-        
         due_date_str = request.form.get('due_date')
         action.due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
-        
         asset_ids = request.form.getlist('assets')
         action.assets = Asset.query.filter(Asset.id.in_(asset_ids)).all()
-        
         supply_ids = request.form.getlist('supplies')
         action.supplies = Supply.query.filter(Supply.id.in_(supply_ids)).all()
-        
+
         db.session.commit()
         log_activity(session.get('user_id'), 'edit_action', f"Updated: {action.title}")
         flash("Action updated.", "success")
         return redirect(url_for('kanban'))
-        
+
     hid = session.get('household_id')
     all_assets = Asset.query.filter_by(household_id=hid).all()
     all_supplies = Supply.query.filter_by(household_id=hid).all()
@@ -466,14 +455,14 @@ def update_status(item_id):
     action = db.session.get(ActionItem, item_id)
     new_status = request.get_json().get('status')
     respawned = False
-    
+
     if new_status in ['ready', 'in_progress', 'blocked', 'done']:
         action.status = new_status
-        if new_status == 'done': 
+        if new_status == 'done':
             action.completed_at = get_local_now()
-            action.owner_user_id = session.get('user_id') 
+            action.owner_user_id = session.get('user_id')
             log_activity(session.get('user_id'), 'completed_task', f"Finished: {action.title}")
-            
+
             if action.is_recurring:
                 new_due = calculate_next_due_date(action.due_date or get_local_now(), action.recur_interval, action.recur_unit)
                 new_action = ActionItem(
@@ -492,11 +481,11 @@ def update_status(item_id):
                 )
                 new_action.assets = action.assets
                 new_action.supplies = action.supplies
-                
+
                 db.session.add(new_action)
                 respawned = True
                 log_activity(session.get('user_id'), 'recurrence_respawn', f"Scheduled next: {action.title} for {new_due.strftime('%Y-%m-%d')}")
-        
+
         db.session.commit()
         return jsonify(success=True, respawned=respawned)
     return jsonify(success=False), 400
@@ -507,7 +496,7 @@ def review():
     inbox_count = InboxItem.query.filter_by(household_id=hid, processed_at=None).count()
     someday_count = ActionItem.query.filter_by(household_id=hid, status='someday').count()
     waiting = ActionItem.query.filter_by(household_id=hid, status='waiting').all()
-    
+
     recurring = ActionItem.query.filter_by(household_id=hid, is_recurring=True).all()
     active_recurring = [item for item in recurring if item.status != 'done']
 
@@ -518,17 +507,17 @@ def dashboard():
     today = get_local_now().date()
     activity = ActivityLog.query.filter(ActivityLog.timestamp >= today).order_by(ActivityLog.timestamp.desc()).all()
     completions = ActionItem.query.filter(ActionItem.completed_at >= today).count()
-    
+
     hid = session.get('household_id')
     active_lists_count = HouseholdList.query.filter_by(household_id=hid, is_deleted=False).count() if hid else 0
-    
+
     purge_cutoff = get_local_now() - timedelta(days=30)
     purgeable_lists_count = HouseholdList.query.filter(HouseholdList.household_id == hid, HouseholdList.is_deleted == True, HouseholdList.deleted_at <= purge_cutoff).count() if hid else 0
     purgeable_items_count = ListItem.query.filter(ListItem.household_id == hid, ListItem.is_deleted == True, ListItem.deleted_at <= purge_cutoff).count() if hid else 0
-    
-    return render_template('dashboard.html', activity=activity, today_completions=completions, 
-                           active_lists_count=active_lists_count, 
-                           purgeable_lists_count=purgeable_lists_count, 
+
+    return render_template('dashboard.html', activity=activity, today_completions=completions,
+                           active_lists_count=active_lists_count,
+                           purgeable_lists_count=purgeable_lists_count,
                            purgeable_items_count=purgeable_items_count)
 
 @app.route('/leaderboard')
@@ -537,7 +526,7 @@ def leaderboard():
     completed_items = ActionItem.query.filter_by(household_id=hid, status='done').all()
     users = {u.id: u.name for u in User.query.filter_by(household_id=hid).all()}
 
-    daily_scores = {} 
+    daily_scores = {}
     for item in completed_items:
         if not item.owner_user_id or not item.completed_at:
             continue
@@ -552,7 +541,7 @@ def leaderboard():
 
     all_scores = [{'name': users.get(uid, 'Unknown'), 'date': d_str, 'points': pts}
                   for (uid, d_str), pts in daily_scores.items()]
-    
+
     top_scores = sorted(all_scores, key=lambda x: x['points'], reverse=True)[:10]
     recent_scores = sorted(all_scores, key=lambda x: x['date'], reverse=True)[:10]
 
@@ -616,7 +605,7 @@ def export_data():
                     row_dict[k] = v.isoformat()
             table_data.append(row_dict)
         data[table.name] = table_data
-        
+
     response = app.response_class(
         response=json.dumps(data, indent=2),
         status=200,
@@ -631,17 +620,17 @@ def import_data():
     if 'backup_file' not in request.files:
         flash('No file uploaded.', 'danger')
         return redirect(url_for('dashboard'))
-        
+
     file = request.files['backup_file']
     if file.filename == '':
         flash('No file selected.', 'danger')
         return redirect(url_for('dashboard'))
-        
+
     try:
         data = json.load(file)
         for table in reversed(db.metadata.sorted_tables):
             db.session.execute(table.delete())
-            
+
         for table in db.metadata.sorted_tables:
             if table.name in data and data[table.name]:
                 records = []
@@ -654,20 +643,20 @@ def import_data():
                         parsed_row[col.name] = val
                     records.append(parsed_row)
                 db.session.execute(table.insert(), records)
-                
+
         db.session.commit()
         flash('Data restored successfully!', 'success')
-        
+
         user = User.query.first()
         if user:
             session['user_id'] = user.id
             session['household_id'] = user.household_id
             log_activity(user.id, 'system_restore', 'Restored database from JSON backup.')
-            
+
     except Exception as e:
         db.session.rollback()
         flash(f'Error restoring data: {str(e)}', 'danger')
-        
+
     return redirect(url_for('dashboard'))
 
 @app.route('/admin/purge', methods=['POST'])
@@ -694,19 +683,19 @@ def manage_lists():
     unassigned_items = ListItem.query.filter_by(household_id=hid, list_id=None, is_deleted=False).order_by(ListItem.sort_order).all()
 
     query = HouseholdList.query.filter_by(household_id=hid, is_deleted=False)
-    
+
     if q:
         query = query.filter((HouseholdList.name.contains(q)) | (HouseholdList.description.contains(q)))
     if tag:
         query = query.filter(HouseholdList.tags.contains(tag))
-        
+
     if sort_by == 'newest':
         query = query.order_by(HouseholdList.created_at.desc())
     elif sort_by == 'oldest':
         query = query.order_by(HouseholdList.created_at.asc())
     elif sort_by == 'name':
         query = query.order_by(HouseholdList.name.asc())
-        
+
     lists = query.all()
     return render_template('lists.html', lists=lists, unassigned_items=unassigned_items)
 
@@ -760,7 +749,7 @@ def add_unassigned_list_item():
     if content:
         highest = ListItem.query.filter_by(household_id=hid, list_id=None).order_by(ListItem.sort_order.desc()).first()
         next_order = (highest.sort_order + 1) if highest else 0
-        
+
         new_item = ListItem(household_id=hid, list_id=None, content=content, sort_order=next_order)
         db.session.add(new_item)
         db.session.commit()
@@ -772,7 +761,7 @@ def add_list_item(id):
     if content:
         highest = ListItem.query.filter_by(list_id=id).order_by(ListItem.sort_order.desc()).first()
         next_order = (highest.sort_order + 1) if highest else 0
-        
+
         new_item = ListItem(household_id=session['household_id'], list_id=id, content=content, sort_order=next_order)
         db.session.add(new_item)
         db.session.commit()
@@ -828,19 +817,19 @@ def assets():
 @app.route('/assets/add', methods=['POST'])
 def add_asset():
     new_asset = Asset(
-        household_id=session['household_id'], 
-        name=request.form.get('name'), 
+        household_id=session['household_id'],
+        name=request.form.get('name'),
         category=request.form.get('category'),
-        context=request.form.get('context'), 
+        context=request.form.get('context'),
         power_source=request.form.get('power_source'),
         battery_type=request.form.get('battery_type'),
         battery_lifespan_days=int(request.form.get('battery_lifespan_days')) if request.form.get('battery_lifespan_days') else None,
-        purchase_url=request.form.get('purchase_url'), 
+        purchase_url=request.form.get('purchase_url'),
         notes=request.form.get('notes')
     )
     supply_ids = request.form.getlist('supplies')
     new_asset.supplies = Supply.query.filter(Supply.id.in_(supply_ids)).all()
-    
+
     db.session.add(new_asset)
     db.session.commit()
     log_activity(session.get('user_id'), 'add_asset', f"Added asset: {new_asset.name}")
@@ -851,10 +840,10 @@ def asset_detail(id):
     asset = db.session.get(Asset, id)
     expenses = Expense.query.filter_by(asset_id=id).order_by(Expense.date.desc()).all()
     all_supplies = Supply.query.filter_by(household_id=session.get('household_id')).all()
-    
+
     total_cost = sum(e.amount for e in expenses)
     maint_cost = sum(e.amount for e in expenses if e.is_maintenance)
-    
+
     return render_template('asset_detail.html', asset=asset, expenses=expenses, total_cost=total_cost, maint_cost=maint_cost, all_supplies=all_supplies)
 
 @app.route('/assets/<int:id>/update_supplies', methods=['POST'])
@@ -898,12 +887,12 @@ def log_maintenance(asset_id, sched_id):
     sched = db.session.get(MaintenanceSchedule, sched_id)
     amount = float(request.form.get('amount'))
     desc = request.form.get('description') or f"Completed {sched.name}"
-    
+
     db.session.add(Expense(asset_id=asset_id, amount=amount, description=desc, is_maintenance=True, maintenance_schedule_id=sched.id))
-    
+
     sched.last_completed = get_local_now()
     sched.next_due = get_local_now() + timedelta(days=sched.frequency_days)
-    
+
     db.session.commit()
     log_activity(session.get('user_id'), 'logged_maintenance', f"Performed {sched.name} on Asset #{asset_id}")
     return redirect(url_for('asset_detail', id=asset_id))
@@ -924,30 +913,30 @@ def supplies():
 def add_supply():
     auto_add = 'auto_add_to_shopping' in request.form
     add_now = 'add_to_list_now' in request.form
-    
+
     new_supply = Supply(
-        household_id=session['household_id'], 
-        name=request.form.get('name'), 
+        household_id=session['household_id'],
+        name=request.form.get('name'),
         quantity=int(request.form.get('quantity') or 1),
-        reorder_threshold=int(request.form.get('threshold') or 0), 
+        reorder_threshold=int(request.form.get('threshold') or 0),
         context=request.form.get('context'),
         purchase_url=request.form.get('purchase_url'),
         store_name=request.form.get('store_name'),
         auto_add_to_shopping=auto_add
     )
     db.session.add(new_supply)
-    db.session.flush() 
-    
+    db.session.flush()
+
     if add_now:
         content = f"Buy: {new_supply.name}"
         if new_supply.store_name:
             content += f" ({new_supply.store_name})"
-            
+
         highest = ListItem.query.filter_by(household_id=session['household_id'], list_id=None).order_by(ListItem.sort_order.desc()).first()
         next_order = (highest.sort_order + 1) if highest else 0
-        
+
         db.session.add(ListItem(household_id=session['household_id'], list_id=None, content=content, sort_order=next_order))
-        
+
     db.session.commit()
     log_activity(session.get('user_id'), 'add_supply', f"Added supply: {new_supply.name}")
     return redirect(url_for('supplies'))
@@ -962,10 +951,10 @@ def use_supply(id):
                 content = f"Restock: {supply.name}"
                 if supply.store_name:
                     content += f" ({supply.store_name})"
-                
+
                 highest = ListItem.query.filter_by(household_id=session['household_id'], list_id=None).order_by(ListItem.sort_order.desc()).first()
                 next_order = (highest.sort_order + 1) if highest else 0
-                
+
                 db.session.add(ListItem(household_id=session['household_id'], list_id=None, content=content, sort_order=next_order))
             else:
                 db.session.add(ActionItem(household_id=session['household_id'], title=f"Buy: {supply.name}", item_type='errand'))
