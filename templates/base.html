@@ -61,6 +61,110 @@
         </div>
     </div>
 
+    <!-- Global New Task Modal -->
+    <div class="modal fade" id="newTaskModal" tabindex="-1" aria-labelledby="newTaskModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content text-light">
+                <div class="modal-header p-0 border-0">
+                    <ul class="nav nav-tabs card-header-tabs m-0 w-100" style="border-bottom: none;">
+                        <li class="nav-item flex-grow-1 text-center"><button class="nav-link active w-100" data-bs-toggle="tab" data-bs-target="#single-task-tab" type="button">New Task</button></li>
+                        <li class="nav-item flex-grow-1 text-center"><button class="nav-link w-100" data-bs-toggle="tab" data-bs-target="#bulk-task-tab" type="button">Bulk Add</button></li>
+                    </ul>
+                </div>
+                <div class="tab-content">
+                    <!-- Single Task Tab -->
+                    <div class="tab-pane fade show active" id="single-task-tab">
+                        <form action="{{ url_for('add_action') }}" method="POST">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="task-title" class="form-label">Title</label>
+                                    <input type="text" name="title" id="task-title" class="form-control" required>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="task-project" class="form-label">Project</label>
+                                        <select name="project_id" id="task-project" class="form-select">
+                                            <option value="">None</option>
+                                            {% for proj in all_projects %}<option value="{{ proj.id }}">{{ proj.name }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="task-asset" class="form-label">Asset</label>
+                                        <select name="asset_id" id="task-asset" class="form-select">
+                                            <option value="">None</option>
+                                            {% for asset in all_assets %}<option value="{{ asset.id }}">{{ asset.name }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="task-description" class="form-label">Description / Notes</label>
+                                    <textarea name="description" id="task-description" class="form-control" rows="3"></textarea>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="task-status" class="form-label">Initial Status</label>
+                                        <select name="status" id="task-status" class="form-select">
+                                            <option value="icebox" selected>Icebox</option>
+                                            <option value="ready">Ready</option>
+                                            <option value="someday">Someday/Maybe</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="task-context" class="form-label">Context</label>
+                                        <input type="text" name="context" id="task-context" class="form-control" placeholder="@home, @work, etc.">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="task-due-date" class="form-label">Due Date</label>
+                                        <input type="date" name="due_date" id="task-due-date" class="form-control">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="submit" class="btn btn-primary">Create Task</button>
+                            </div>
+                        </form>
+                    </div>
+                    <!-- Bulk Add Tab -->
+                    <div class="tab-pane fade" id="bulk-task-tab">
+                        <form action="{{ url_for('add_action_bulk') }}" method="POST">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Tasks (One per line)</label>
+                                    <textarea name="bulk_items" class="form-control" rows="5" placeholder="Sweep floor&#10;Organize workbench&#10;Check oil in mower" required></textarea>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Add to Project</label>
+                                        <select name="project_id" class="form-select">
+                                            <option value="">None</option>
+                                            {% for proj in all_projects %}<option value="{{ proj.id }}">{{ proj.name }}</option>{% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Set Status for All</label>
+                                        <select name="status" class="form-select">
+                                            <option value="icebox" selected>Icebox</option>
+                                            <option value="ready">Ready</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Apply Context to All (Optional)</label>
+                                    <input type="text" name="context" class="form-control" placeholder="e.g. @Garage">
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="submit" class="btn btn-warning text-dark fw-bold">Bulk Add Tasks</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Initialize tooltips

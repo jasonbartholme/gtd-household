@@ -56,6 +56,7 @@ class User(db.Model):
 class Project(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
+    asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(50), default='active') # active, completed
@@ -63,6 +64,7 @@ class Project(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)
 
     actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
+    asset = db.relationship('Asset', backref=db.backref('projects', lazy='dynamic'))
 
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -214,6 +216,7 @@ def inject_global_data():
     current_user = db.session.get(User, current_user_id) if current_user_id else None
     all_users = User.query.all()
 
+    # Data for global modals and forms
     hid = session.get('household_id')
     all_projects = Project.query.filter_by(household_id=hid, status='active').all() if hid else []
 
@@ -264,6 +267,7 @@ def inject_global_data():
         current_user=current_user,
         all_users=all_users,
         all_projects=all_projects,
+        all_assets=Asset.query.filter_by(household_id=hid).order_by(Asset.name).all() if hid else [],
         today=get_local_now().date(),
         unproc_inbox=unproc_inbox,
         page_title=page_title,
@@ -335,15 +339,22 @@ def run_migrations():
 
     inspector = inspect(db.engine)
     action_item_columns = [c['name'] for c in inspector.get_columns('action_item')]
+    project_columns = [c['name'] for c in inspector.get_columns('project')]
 
-    with db.session.begin() as session:
+    with db.session.begin():
         # Migration 1: Add sort_order column to action_item if it doesn't exist
         if 'sort_order' not in action_item_columns:
             print("Adding 'sort_order' column to 'action_item' table...")
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN sort_order INTEGER DEFAULT 0'))
             print("'sort_order' column added.")
 
-        # Migration 2: Change existing 'ready' tasks to 'icebox'
+        # Migration 2: Add asset_id column to project if it doesn't exist
+        if 'asset_id' not in project_columns:
+            print("Adding 'asset_id' column to 'project' table...")
+            db.session.execute(text('ALTER TABLE project ADD COLUMN asset_id INTEGER REFERENCES asset(id)'))
+            print("'asset_id' column added.")
+
+        # Migration 3: Change existing 'ready' tasks to 'icebox'
         ready_tasks = db.session.query(ActionItem).filter_by(status='ready').all()
         if ready_tasks:
             print(f"Migrating {len(ready_tasks)} 'ready' tasks to 'icebox' status...")
@@ -412,7 +423,8 @@ def add_project():
     p = Project(
         household_id=session.get('household_id'),
         name=request.form.get('name'),
-        description=request.form.get('description')
+        description=request.form.get('description'),
+        asset_id=int(request.form.get('asset_id')) if request.form.get('asset_id') else None
     )
     db.session.add(p)
     db.session.commit()
@@ -447,11 +459,14 @@ def edit_project(id):
         project.name = request.form.get('name')
         project.description = request.form.get('description')
         db.session.commit()
+        project.asset_id = int(request.form.get('asset_id')) if request.form.get('asset_id') else None
         log_activity(session.get('user_id'), 'edit_project', f"Updated project: {project.name}")
         flash(f"Project '{project.name}' updated successfully.", "success")
         return redirect(url_for('project_detail', id=id))
 
-    return render_template('project_edit.html', project=project)
+    hid = session.get('household_id')
+    all_assets = Asset.query.filter_by(household_id=hid).order_by(Asset.name).all()
+    return render_template('project_edit.html', project=project, all_assets=all_assets)
 
 @app.route('/projects/<int:id>/toggle', methods=['POST'])
 def toggle_project_status(id):
@@ -570,6 +585,78 @@ def process_inbox(item_id):
         # Default "Save and Close" behavior
         return redirect(url_for('inbox'))
 
+@app.route('/action/add', methods=['POST'])
+def add_action():
+    """Adds a new action item directly, bypassing the inbox."""
+    hid = session.get('household_id')
+    due_date_str = request.form.get('due_date')
+    due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
+
+    interval = request.form.get('recur_interval')
+    is_recurring = bool(interval and int(interval) > 0)
+
+    project_id = request.form.get('project_id')
+    project_id = int(project_id) if project_id else None
+
+    sort_order = 0
+    if project_id:
+        highest = ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
+        sort_order = (highest.sort_order + 1) if highest else 0
+
+    action = ActionItem(
+        household_id=hid,
+        title=request.form.get('title'),
+        description=request.form.get('description'),
+        sort_order=sort_order,
+        item_type=request.form.get('item_type', 'task'),
+        complexity_fib=int(request.form.get('complexity_fib', 1)),
+        context=request.form.get('context'),
+        project_id=project_id,
+        status=request.form.get('status', 'icebox'),
+        owner_user_id=session.get('user_id'),
+        due_date=due_date,
+        is_recurring=is_recurring,
+        recur_interval=int(interval) if is_recurring else 1,
+        recur_unit=request.form.get('recur_unit') if is_recurring else 'days'
+    )
+    db.session.add(action)
+    db.session.commit()
+    flash(f"New task '{action.title}' created!", "success")
+    return redirect(request.referrer or url_for('kanban'))
+
+@app.route('/action/add_bulk', methods=['POST'])
+def add_action_bulk():
+    """Adds multiple action items directly from the bulk form."""
+    hid = session.get('household_id')
+    bulk_text = request.form.get('bulk_items', '')
+    items = [line.strip() for line in bulk_text.split('\n') if line.strip()]
+
+    project_id = request.form.get('project_id')
+    project_id = int(project_id) if project_id else None
+    status = request.form.get('status', 'icebox')
+    context = request.form.get('context')
+
+    for item_title in items:
+        sort_order = 0
+        if project_id:
+            highest = ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
+            sort_order = (highest.sort_order + 1) if highest else 0
+
+        action = ActionItem(
+            household_id=hid,
+            title=item_title,
+            project_id=project_id,
+            status=status,
+            context=context,
+            sort_order=sort_order,
+            owner_user_id=session.get('user_id')
+        )
+        db.session.add(action)
+
+    db.session.commit()
+    flash(f"Bulk added {len(items)} new tasks!", "success")
+    return redirect(request.referrer or url_for('kanban'))
+
 @app.route('/action/<int:id>/edit', methods=['GET', 'POST'])
 def edit_action(id):
     action = db.session.get(ActionItem, id)
@@ -669,7 +756,7 @@ def icebox_view():
         return redirect(url_for('icebox_view'))
 
     # GET request
-    icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox').order_by(ActionItem.project_id, ActionItem.created_at).all()
+    icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox').order_by(ActionItem.project_id, ActionItem.sort_order).all()
 
     # Group by project
     from itertools import groupby
@@ -1029,13 +1116,19 @@ def add_asset():
 @app.route('/assets/<int:id>')
 def asset_detail(id):
     asset = db.session.get(Asset, id)
+    hid = session.get('household_id')
     expenses = Expense.query.filter_by(asset_id=id).order_by(Expense.date.desc()).all()
-    all_supplies = Supply.query.filter_by(household_id=session.get('household_id')).all()
+    all_supplies = Supply.query.filter_by(household_id=hid).all()
 
     total_cost = sum(e.amount for e in expenses)
     maint_cost = sum(e.amount for e in expenses if e.is_maintenance)
 
-    return render_template('asset_detail.html', asset=asset, expenses=expenses, total_cost=total_cost, maint_cost=maint_cost, all_supplies=all_supplies)
+    active_projects = asset.projects.filter_by(status='active').order_by(Project.created_at.desc()).all()
+    completed_projects = asset.projects.filter_by(status='completed').order_by(Project.completed_at.desc()).all()
+
+    return render_template('asset_detail.html', asset=asset, expenses=expenses,
+                           total_cost=total_cost, maint_cost=maint_cost, all_supplies=all_supplies,
+                           active_projects=active_projects, completed_projects=completed_projects)
 
 @app.route('/assets/<int:id>/update_supplies', methods=['POST'])
 def update_asset_supplies(id):

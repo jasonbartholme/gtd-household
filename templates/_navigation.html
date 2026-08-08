@@ -14,6 +14,10 @@
 </div>
 {% endif %}
 
+<div class="d-grid mb-3">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newTaskModal">+ New Task</button>
+</div>
+
 <ul class="nav nav-pills flex-column mb-auto">
     {% for category, links in nav_links.items() %}
         <li class="nav-item mt-2">
