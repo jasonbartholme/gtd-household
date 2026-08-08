@@ -46,6 +46,20 @@
                 {% include '_navigation.html' %}
             </div>
             <div class="col-md-10 p-4">
+                <div class="d-flex justify-content-end mb-3">
+                    {% if current_user %}
+                    <div style="width: 200px;">
+                        <form action="{{ url_for('switch_user') }}" method="POST" class="d-flex align-items-center">
+                            <select name="user_id" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Switch user">
+                                {% for u in all_users %}
+                                <option value="{{ u.id }}" {% if u.id == current_user.id %}selected{% endif %}>{{ u.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+
                 {% with messages = get_flashed_messages(with_categories=true) %}
                     {% if messages %}
                         {% for category, message in messages %}

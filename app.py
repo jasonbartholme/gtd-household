@@ -251,8 +251,8 @@ def inject_global_data():
             'kanban': 'Board',
             'inbox': 'Inbox',
             'review': 'Review',
-        'icebox_view': 'Icebox',
-            'calendar_view': 'Calendar',
+            'icebox_view': 'Icebox',
+            'calendar_view': 'Calendar', # This will default to grid view
         },
         'Management': {
             'manage_projects': 'Projects',
@@ -353,14 +353,6 @@ def run_migrations():
             print("Adding 'asset_id' column to 'project' table...")
             db.session.execute(text('ALTER TABLE project ADD COLUMN asset_id INTEGER REFERENCES asset(id)'))
             print("'asset_id' column added.")
-
-        # Migration 3: Change existing 'ready' tasks to 'icebox'
-        ready_tasks = db.session.query(ActionItem).filter_by(status='ready').all()
-        if ready_tasks:
-            print(f"Migrating {len(ready_tasks)} 'ready' tasks to 'icebox' status...")
-            for task in ready_tasks:
-                task.status = 'icebox'
-            print("Migration complete.")
 
 # ==========================================
 # 5. ROUTES
@@ -827,23 +819,27 @@ def leaderboard():
 
 @app.route('/calendar')
 @app.route('/calendar/<int:year>/<int:month>')
-def calendar_view(year=None, month=None):
+@app.route('/calendar/<int:year>/<int:month>/<string:view_type>')
+def calendar_view(year=None, month=None, view_type='grid'):
     today = get_local_now().date()
     if year is None or month is None:
         year = today.year
         month = today.month
 
     first_of_month = date(year, month, 1)
+    # Calculate the last day of the current month
+    last_day_of_month = date(year, month, calendar.monthrange(year, month)[1])
+
     prev_month_date = first_of_month - timedelta(days=1)
-    next_month_date = first_of_month + timedelta(days=32)
-    next_month_date = date(next_month_date.year, next_month_date.month, 1)
+    # Calculate the first day of the next month
+    next_month_date = last_day_of_month + timedelta(days=1)
 
     hid = session.get('household_id')
-    actions = ActionItem.query.filter(
+    all_actions_for_month = ActionItem.query.filter(
         ActionItem.household_id == hid,
         ActionItem.due_date >= first_of_month,
-        ActionItem.due_date < next_month_date
-    ).all()
+        ActionItem.due_date <= last_day_of_month # Filter up to the last day of the current month
+    ).order_by(ActionItem.due_date.asc()).all() # Order by due date for list view
 
     cal = calendar.Calendar(firstweekday=6)
     weeks_raw = cal.monthdays2calendar(year, month)
@@ -856,7 +852,7 @@ def calendar_view(year=None, month=None):
             day_events = []
             if in_month:
                 current_dt = date(year, month, day_num)
-                day_events = [a for a in actions if a.due_date and a.due_date.date() == current_dt]
+                day_events = [a for a in all_actions_for_month if a.due_date and a.due_date.date() == current_dt]
             week.append({
                 'day_num': day_num if day_num > 0 else "",
                 'in_month': in_month,
@@ -865,9 +861,12 @@ def calendar_view(year=None, month=None):
             })
         calendar_weeks.append(week)
 
-    return render_template('calendar.html', year=year, month=month, month_name=calendar.month_name[month],
-                           calendar_weeks=calendar_weeks, prev_year=prev_month_date.year, prev_month=prev_month_date.month,
-                           next_year=next_month_date.year, next_month=next_month_date.month)
+    return render_template('calendar.html',
+                           year=year, month=month, month_name=calendar.month_name[month],
+                           calendar_weeks=calendar_weeks, all_actions_for_month=all_actions_for_month,
+                           prev_year=prev_month_date.year, prev_month=prev_month_date.month,
+                           next_year=next_month_date.year, next_month=next_month_date.month,
+                           view_type=view_type)
 
 @app.route('/export')
 def export_data():

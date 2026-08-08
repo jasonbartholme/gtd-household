@@ -1,18 +1,4 @@
-<h4 class="text-light mb-3">GTD App</h4>
-
-{% if current_user %}
-<div class="card bg-secondary mb-3">
-    <div class="card-body p-2">
-        <form action="{{ url_for('switch_user') }}" method="POST" class="d-flex align-items-center">
-            <select name="user_id" class="form-select form-select-sm" onchange="this.form.submit()">
-                {% for u in all_users %}
-                <option value="{{ u.id }}" {% if u.id == current_user.id %}selected{% endif %}>{{ u.name }}</option>
-                {% endfor %}
-            </select>
-        </form>
-    </div>
-</div>
-{% endif %}
+<h4 class="text-light mb-3">GTD House</h4>
 
 <div class="d-grid mb-3">
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newTaskModal">+ New Task</button>

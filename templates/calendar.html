@@ -1,39 +1,139 @@
 {% extends "base.html" %}
-    {% block content %}
+
+{% block content %}
+<div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h4 mb-0">{{ month_name }} {{ year }}</h2>
         <div>
-            <a href="{{ url_for('calendar_view', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary btn-sm">&larr; Prev</a>
-            <a href="{{ url_for('calendar_view') }}" class="btn btn-outline-primary btn-sm">Today</a>
-            <a href="{{ url_for('calendar_view', year=next_year, month=next_month) }}" class="btn btn-outline-secondary btn-sm">Next &rarr;</a>
+            <h1 class="mb-0">{{ month_name }} {{ year }}</h1>
+        </div>
+        <div class="btn-group" role="group" aria-label="Calendar View Toggle">
+            <a href="{{ url_for('calendar_view', year=year, month=month, view_type='grid') }}" class="btn btn-outline-primary {% if view_type == 'grid' %}active{% endif %}">Grid View</a>
+            <a href="{{ url_for('calendar_view', year=year, month=month, view_type='list') }}" class="btn btn-outline-primary {% if view_type == 'list' %}active{% endif %}">List View</a>
         </div>
     </div>
-    <div class="table-responsive">
-        <div class="row g-0 text-center border-bottom border-secondary mb-1">
-            <div class="col py-2 fw-bold text-muted small">SUN</div>
-            <div class="col py-2 fw-bold text-muted small">MON</div>
-            <div class="col py-2 fw-bold text-muted small">TUE</div>
-            <div class="col py-2 fw-bold text-muted small">WED</div>
-            <div class="col py-2 fw-bold text-muted small">THU</div>
-            <div class="col py-2 fw-bold text-muted small">FRI</div>
-            <div class="col py-2 fw-bold text-muted small">SAT</div>
-        </div>
-        {% for week in calendar_weeks %}
-        <div class="row g-0">
-            {% for day in week %}
-            <div class="col cal-day {{ 'today' if day.is_today }} {{ 'other-month' if not day.in_month }}">
-                <div class="d-flex justify-content-between align-items-start mb-1">
-                    <span class="small fw-bold {{ 'text-primary' if day.is_today else 'text-muted' }}">{{ day.day_num }}</span>
-                </div>
-                {% for event in day.events %}
-                    <a href="{{ url_for('edit_action', id=event.id) }}" 
-                       class="cal-event bg-{{ 'info' if event.item_type == 'task' else 'warning' if event.item_type == 'chore' else 'success' }} text-dark fw-bold">
-                        {% if event.is_recurring %}🔄{% endif %} {{ event.title }}
-                    </a>
-                {% endfor %}
+
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{{ url_for('calendar_view', year=prev_year, month=prev_month, view_type=view_type) }}" class="btn btn-secondary">&laquo; Previous Month</a>
+        <a href="{{ url_for('calendar_view', year=next_year, month=next_month, view_type=view_type) }}" class="btn btn-secondary">Next Month &raquo;</a>
+    </div>
+
+    {% if view_type == 'grid' %}
+        <div class="calendar-grid">
+            <div class="calendar-header">
+                <div class="calendar-day-name">Sun</div>
+                <div class="calendar-day-name">Mon</div>
+                <div class="calendar-day-name">Tue</div>
+                <div class="calendar-day-name">Wed</div>
+                <div class="calendar-day-name">Thu</div>
+                <div class="calendar-day-name">Fri</div>
+                <div class="calendar-day-name">Sat</div>
             </div>
+            {% for week in calendar_weeks %}
+                <div class="calendar-week">
+                    {% for day in week %}
+                        <div class="calendar-day {% if not day.in_month %}outside-month{% endif %} {% if day.is_today %}today{% endif %}">
+                            <div class="day-number">{{ day.day_num }}</div>
+                            <div class="day-events">
+                                {% for event in day.events %}
+                                    <div class="event-item badge bg-info mb-1">
+                                        <a href="{{ url_for('edit_action', id=event.id) }}" class="text-white text-decoration-none">{{ event.title }}</a>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
             {% endfor %}
         </div>
-        {% endfor %}
-    </div>
-    {% endblock %}
+    {% elif view_type == 'list' %}
+        <h3 class="mt-4 mb-3">Events for {{ month_name }} {{ year }}</h3>
+        {% if all_actions_for_month %}
+            <div class="list-group">
+                {% for action in all_actions_for_month %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none">{{ action.title }}</a></h5>
+                            <small class="text-muted">Due: {{ action.due_date.strftime('%Y-%m-%d') }}</small>
+                            {% if action.project %}
+                                <small class="d-block text-muted">Project: <a href="{{ url_for('project_detail', id=action.project.id) }}">{{ action.project.name }}</a></small>
+                            {% endif %}
+                            {% if action.description %}
+                                <p class="mb-1 small text-muted">{{ action.description|truncate(100) }}</p>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-{{ 'success' if action.status == 'done' else 'primary' }}">{{ action.status|title }}</span>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="card card-body text-center">
+                <p class="text-muted mb-0">No events scheduled for this month.</p>
+            </div>
+        {% endif %}
+    {% endif %}
+</div>
+
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        border: 1px solid #495057; /* Outer border */
+        border-radius: 0.25rem;
+        overflow: hidden; /* Ensures rounded corners */
+    }
+    .calendar-header {
+        display: contents; /* Makes children participate in grid layout */
+    }
+    .calendar-day-name {
+        background-color: #343a40;
+        padding: 0.5rem;
+        text-align: center;
+        font-weight: bold;
+        border-bottom: 1px solid #495057;
+        border-right: 1px solid #495057;
+    }
+    .calendar-day-name:last-child {
+        border-right: none;
+    }
+    .calendar-week {
+        display: contents; /* Makes children participate in grid layout */
+    }
+    .calendar-day {
+        min-height: 120px; /* Adjust as needed */
+        padding: 0.5rem;
+        border-right: 1px solid #495057;
+        border-bottom: 1px solid #495057;
+        background-color: #212529;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    .calendar-day:nth-child(7n) { /* Remove right border for last day of week */
+        border-right: none;
+    }
+    .calendar-grid .calendar-week:last-child .calendar-day { /* Remove bottom border for last week */
+        border-bottom: none;
+    }
+    .outside-month {
+        background-color: #2c3034; /* Slightly different background for days outside the month */
+        color: #6c757d; /* Muted text color */
+    }
+    .day-number {
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+    .today {
+        background-color: #495057; /* Highlight today's date */
+        border: 1px solid #0d6efd; /* Blue border for today */
+    }
+    .event-item {
+        font-size: 0.75rem;
+        line-height: 1.2;
+        padding: 0.2rem 0.4rem;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap; /* Keep badge content on one line */
+    }
+</style>
+{% endblock %}
