@@ -1,9 +1,16 @@
 import os
 
-# Import the TEMPLATES dictionary directly from your current app.py
+# Keep the import at runtime rather than a static `from app import TEMPLATES`.
+# This avoids Pyright/Pylance reporting the symbol as an unknown import when
+# the app.py module does not expose a typed definition for `TEMPLATES`.
 try:
-    from app import TEMPLATES
+    import app
 except ImportError:
+    print("Error: Could not import app.py. Make sure this script is in the same folder as app.py.")
+    exit(1)
+
+TEMPLATES = getattr(app, "TEMPLATES", None)
+if TEMPLATES is None:
     print("Error: Could not find 'TEMPLATES' in app.py. Make sure this script is in the same folder as app.py.")
     exit(1)
 
