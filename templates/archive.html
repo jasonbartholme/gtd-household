@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">{{ page_title }}</h1>
+
+    <div class="card mb-4">
+        <div class="card-header">
+            Search Archive
+        </div>
+        <div class="card-body">
+            <form action="{{ url_for('archive_view') }}" method="get" class="row g-3 align-items-center">
+                <div class="col-md-8">
+                    <input type="text" name="q" class="form-control" placeholder="Search by task, project name, or description..." value="{{ q }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">Search</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <h2 class="mt-5 mb-3">Archived Tasks (Done)</h2>
+    {% if archived_actions.items %}
+    <div class="list-group mb-4">
+        {% for action in archived_actions.items %}
+        <div class="list-group-item list-group-item-action flex-column align-items-start">
+            <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1">{{ action.title }}</h5>
+                <small class="text-muted">Completed: {{ action.completed_at.strftime('%Y-%m-%d') if action.completed_at else 'N/A' }}</small>
+            </div>
+            <p class="mb-1">{{ action.description or 'No description.' }}</p>
+            {% if action.project %}
+            <small class="text-muted">Project: <a href="{{ url_for('project_detail', id=action.project.id) }}">{{ action.project.name }}</a></small>
+            {% else %}
+            <small class="text-muted">No associated project.</small>
+            {% endif %}
+            {% if action.context %}<span class="badge bg-secondary ms-2">{{ action.context }}</span>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <nav aria-label="Page navigation for archived tasks">
+        <ul class="pagination justify-content-center">
+            {% if archived_actions.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('archive_view', page=archived_actions.prev_num, q=q) }}">Previous</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            {% endif %}
+            {% for p in archived_actions.iter_pages() %}
+                {% if p %}
+                    {% if p == archived_actions.page %}
+                    <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('archive_view', page=p, q=q) }}">{{ p }}</a></li>
+                    {% endif %}
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+            {% if archived_actions.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('archive_view', page=archived_actions.next_num, q=q) }}">Next</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% else %}
+    <p>No archived tasks found.</p>
+    {% endif %}
+
+    <h2 class="mt-5 mb-3">Completed Projects</h2>
+    {% if completed_projects.items %}
+    <div class="list-group mb-4">
+        {% for project in completed_projects.items %}
+        <div class="list-group-item list-group-item-action flex-column align-items-start">
+            <div class="d-flex w-100 justify-content-between">
+                <h5 class="mb-1"><a href="{{ url_for('project_detail', id=project.id) }}">{{ project.name }}</a></h5>
+                <small class="text-muted">Completed: {{ project.completed_at.strftime('%Y-%m-%d') if project.completed_at else 'N/A' }}</small>
+            </div>
+            <p class="mb-1">{{ project.description or 'No description.' }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <nav aria-label="Page navigation for completed projects">
+        <ul class="pagination justify-content-center">
+            {% if completed_projects.has_prev %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('archive_view', page=completed_projects.prev_num, q=q) }}">Previous</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Previous</span></li>
+            {% endif %}
+            {% for p in completed_projects.iter_pages() %}
+                {% if p %}
+                    {% if p == completed_projects.page %}
+                    <li class="page-item active"><span class="page-link">{{ p }}</span></li>
+                    {% else %}
+                    <li class="page-item"><a class="page-link" href="{{ url_for('archive_view', page=p, q=q) }}">{{ p }}</a></li>
+                    {% endif %}
+                {% else %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+            {% endfor %}
+            {% if completed_projects.has_next %}
+            <li class="page-item"><a class="page-link" href="{{ url_for('archive_view', page=completed_projects.next_num, q=q) }}">Next</a></li>
+            {% else %}
+            <li class="page-item disabled"><span class="page-link">Next</span></li>
+            {% endif %}
+        </ul>
+    </nav>
+    {% else %}
+    <p>No completed projects found.</p>
+    {% endif %}
+</div>
+{% endblock %}

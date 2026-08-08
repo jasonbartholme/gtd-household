@@ -1,139 +1,126 @@
 {% extends "base.html" %}
 
-    {% macro render_kanban_card(item) %}
-    <div class="card kanban-card shadow-sm" draggable="true" ondragstart="drag(event)" id="card-{{ item.id }}" data-id="{{ item.id }}">
-        <div class="card-body p-3">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-                <span class="badge bg-secondary-subtle text-secondary small text-capitalize">{{ item.item_type }}</span>
-                <span class="text-muted small">Chorenado: {{ item.complexity_fib }}</span>
-            </div>
-            <h6 class="card-title text-light mb-1">
-                <a href="{{ url_for('edit_action', id=item.id) }}" class="text-decoration-none text-info" title="Click to Edit">{{ item.title }}</a>
-            </h6>
-            <div class="small mb-1">
-                {% if item.project %}<span class="badge border border-primary text-primary me-1">📁 {{ item.project.name }}</span>{% endif %}
-                {% if item.context %}<span class="badge border border-secondary text-secondary me-1">@{{ item.context }}</span>{% endif %}
-                {% if item.due_date %}📅 {{ item.due_date.strftime('%m-%d') }}{% endif %}
-                {% if item.is_recurring %}<span class="text-info ms-2">🔄 Every {{ item.recur_interval }} {{ item.recur_unit }}</span>{% endif %}
-            </div>
-            {% if item.description %}
-                <p class="card-text text-muted small mb-1">{{ item.description[:60] }}{% if item.description|length > 60 %}...{% endif %}</p>
-            {% endif %}
-        </div>
-    </div>
-    {% endmacro %}
+{% block content %}
+<div class="container-fluid mt-4">
+    <h1 class="mb-4">{{ page_title }}</h1>
 
-    {% block content %}
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h4 mb-0">Workflow Board</h2>
-        <a href="{{ url_for('inbox') }}" class="btn btn-primary btn-sm">+ Capture Thought</a>
-    </div>
+    {% set columns = {
+        'ready': {'name': 'Ready', 'color': 'primary'},
+        'in_progress': {'name': 'In Progress', 'color': 'warning'},
+        'blocked': {'name': 'Blocked', 'color': 'danger'},
+        'done': {'name': 'Done', 'color': 'success'}
+    } %}
+
     <div class="row g-3">
-        {% set cols = [('ready', 'Ready', 'info', 'Next Actions: Physical, visible actions you can take right now without waiting.'), ('in_progress', 'Doing', 'warning', 'Work in Progress: Limit this to maintain focus.'), ('blocked', 'Blocked', 'danger', 'Waiting On: Tasks stalled pending input from someone or something else.'), ('done', 'Done', 'success', 'Archived completions. Good job!')] %}
-        {% for col_id, col_name, badge_color, tooltip in cols %}
-        <div class="col-12 col-md-3">
-            <div class="p-1">
-                <div class="d-flex justify-content-between align-items-center mb-2 px-1">
-                    <span class="fw-bold text-uppercase small text-{{ badge_color }}" data-bs-toggle="tooltip" title="{{ tooltip }}" style="cursor: help;">{{ col_name }} ℹ️</span>
-                    <span class="badge bg-dark border border-secondary text-muted">{{ items|selectattr('status', 'equalto', col_id)|list|length }}</span>
+        {% for status, col_data in columns.items() %}
+        <div class="col">
+            <div class="card h-100">
+                <div class="card-header bg-{{ col_data.color }} text-white">
+                    {{ col_data.name }}
                 </div>
-                <div class="kanban-col" id="{{ col_id }}" ondrop="drop(event)" ondragover="allowDrop(event)" ondragleave="dragLeave(event)">
-                    
-                    {% if col_id == 'ready' %}
-                        <!-- Kanban Filters for Ready Column -->
-                        <div class="mb-3 d-flex gap-1 flex-wrap kanban-filters">
-                            <button class="btn btn-sm py-0 px-2 btn-outline-secondary active filter-btn" onclick="filterReady('all', this)">All</button>
-                            <button class="btn btn-sm py-0 px-2 btn-outline-info filter-btn" onclick="filterReady('recurring', this)">Recurring</button>
-                            <button class="btn btn-sm py-0 px-2 btn-outline-primary filter-btn" onclick="filterReady('projects', this)">Projects</button>
-                            <button class="btn btn-sm py-0 px-2 btn-outline-warning filter-btn" onclick="filterReady('errands', this)">Errands</button>
+                <div class="card-body list-group kanban-column" id="col-{{ status }}" data-status="{{ status }}">
+                    {% for item in items if item.status == status %}
+                    <div class="list-group-item kanban-card" data-id="{{ item.id }}">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ item.title }}</h6>
+                            <small><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
                         </div>
-
-                        {% set ready_items = items|selectattr('status', 'equalto', 'ready')|list %}
-                        
-                        <div class="ready-group" data-group="recurring">
-                            {% set rec_items = ready_items|selectattr('is_recurring', 'equalto', true)|list %}
-                            {% if rec_items %}
-                                <div class="text-muted small fw-bold mt-2 mb-2 border-bottom border-secondary pb-1">Recurring Items</div>
-                                {% for item in rec_items %} {{ render_kanban_card(item) }} {% endfor %}
-                            {% endif %}
+                        <p class="mb-1 small text-muted">{{ item.description|truncate(100) if item.description else 'No description' }}</p>
+                        {% if item.project %}
+                        <small class="d-block text-muted">
+                            <i class="bi bi-folder"></i> <a href="{{ url_for('project_detail', id=item.project.id) }}" class="text-decoration-none">{{ item.project.name }}</a>
+                        </small>
+                        {% endif %}
+                        <div class="mt-2">
+                            <span class="badge bg-secondary">{{ item.complexity_fib }} pts</span>
+                            <a href="{{ url_for('edit_action', id=item.id) }}" class="btn btn-sm btn-outline-secondary float-end py-0 px-1">Edit</a>
                         </div>
-
-                        <div class="ready-group" data-group="projects">
-                            {% set proj_items = ready_items|selectattr('is_recurring', 'equalto', false)|rejectattr('project_id', 'none')|list %}
-                            {% if proj_items %}
-                                <div class="text-muted small fw-bold mt-3 mb-2 border-bottom border-secondary pb-1">Project Actions</div>
-                                {% for item in proj_items %} {{ render_kanban_card(item) }} {% endfor %}
-                            {% endif %}
-                        </div>
-
-                        <div class="ready-group" data-group="errands">
-                            {% set err_items = ready_items|selectattr('is_recurring', 'equalto', false)|selectattr('project_id', 'none')|selectattr('item_type', 'equalto', 'errand')|list %}
-                            {% if err_items %}
-                                <div class="text-muted small fw-bold mt-3 mb-2 border-bottom border-secondary pb-1">Errands & Shopping</div>
-                                {% for item in err_items %} {{ render_kanban_card(item) }} {% endfor %}
-                            {% endif %}
-                        </div>
-
-                        <div class="ready-group" data-group="tasks">
-                            {% set task_items = ready_items|selectattr('is_recurring', 'equalto', false)|selectattr('project_id', 'none')|rejectattr('item_type', 'equalto', 'errand')|list %}
-                            {% if task_items %}
-                                <div class="text-muted small fw-bold mt-3 mb-2 border-bottom border-secondary pb-1">Tasks & Chores</div>
-                                {% for item in task_items %} {{ render_kanban_card(item) }} {% endfor %}
-                            {% endif %}
-                        </div>
-
-                    {% else %}
-                        <!-- Standard loop for Doing, Blocked, Done -->
-                        {% for item in items if item.status == col_id %}
-                            {{ render_kanban_card(item) }}
-                        {% endfor %}
-                    {% endif %}
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
         {% endfor %}
     </div>
-    {% endblock %}
-    {% block scripts %}
-    <script>
-        function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
-        function dragLeave(ev) { ev.currentTarget.classList.remove('drag-over'); }
-        function drag(ev) { ev.dataTransfer.setData("text", ev.target.id); }
-        function drop(ev) {
-            ev.preventDefault();
-            const targetCol = ev.currentTarget;
-            targetCol.classList.remove('drag-over');
-            const data = ev.dataTransfer.getData("text");
-            const card = document.getElementById(data);
-            const newStatus = targetCol.id;
-            const itemId = card.getAttribute('data-id');
-            targetCol.appendChild(card);
-            fetch(`/api/update_status/${itemId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            }).then(res => res.json()).then(data => {
-                if(!data.success) window.location.reload();
-                else if (newStatus === 'done' && data.respawned) {
-                    location.reload(); 
-                }
-            });
-        }
+</div>
 
-        // Kanban Filter Logic
-        function filterReady(type, btnElement) {
-            // Update Active State on Buttons
-            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-            btnElement.classList.add('active');
+<style>
+.kanban-column {
+    min-height: 400px;
+    background-color: #343a40;
+}
+.kanban-card {
+    background-color: #495057;
+    border: 1px solid #6c757d;
+    margin-bottom: 0.5rem;
+    cursor: grab;
+}
+.sortable-ghost {
+    opacity: 0.4;
+    background: #555;
+}
+.sortable-chosen {
+    cursor: grabbing;
+}
+</style>
 
-            // Show/Hide Groups
-            document.querySelectorAll('.ready-group').forEach(group => {
-                if (type === 'all' || group.dataset.group === type) {
-                    group.style.display = 'block';
-                } else {
-                    group.style.display = 'none';
-                }
-            });
-        }
-    </script>
-    {% endblock %}
+<!-- Include SortableJS from a CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const columns = document.querySelectorAll('.kanban-column');
+    columns.forEach(col => {
+        new Sortable(col, {
+            group: 'kanban', // set both lists to same group
+            animation: 150,
+            handle: '.bi-grip-vertical',
+            onEnd: function (evt) {
+                const itemEl = evt.item; // dragged HTMLElement
+                const toCol = evt.to;   // target list
+
+                const itemId = itemEl.getAttribute('data-id');
+                const newStatus = toCol.getAttribute('data-status');
+
+                // Make API call to update status
+                fetch(`/api/update_status/${itemId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log(`Item ${itemId} moved to ${newStatus}`);
+                        // If the task was moved to 'Done' and respawned, refresh the page
+                        // to show the new recurring task.
+                        if (data.respawned) {
+                            // Find the card that was just moved
+                            const card = document.querySelector(`.kanban-card[data-id="${itemId}"]`);
+                            if (card) {
+                                // Add a visual indicator that it's done
+                                card.style.opacity = '0.5';
+                                card.style.textDecoration = 'line-through';
+                            }
+                            // Use a small delay to allow user to see the change before reload
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 500);
+                        }
+                    } else {
+                        console.error('Failed to update status');
+                        // Optionally, move the card back to its original column on failure
+                        evt.from.appendChild(itemEl);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    evt.from.appendChild(itemEl);
+                });
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

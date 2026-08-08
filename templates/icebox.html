@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">{{ page_title }}</h1>
+        <button type="submit" form="icebox-form" class="btn btn-primary">Move Selected to Ready</button>
+    </div>
+
+    <p class="text-muted">These items have been reviewed but are not ready to be worked on yet. Select items and move them to "Ready" to make them appear on the Kanban board.</p>
+
+    <form action="{{ url_for('icebox_view') }}" method="POST" id="icebox-form">
+        {% if not grouped_items %}
+            <div class="card card-body text-center">
+                <p class="mb-0">The icebox is empty. Well done!</p>
+            </div>
+        {% else %}
+            {% for project, items in grouped_items.items() %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        {% if project %}
+                            <a href="{{ url_for('project_detail', id=project.id) }}">{{ project.name }}</a>
+                        {% else %}
+                            No Project
+                        {% endif %}
+                    </h5>
+                </div>
+                <div class="list-group list-group-flush">
+                    {% for item in items %}
+                    <label class="list-group-item d-flex align-items-center">
+                        <input class="form-check-input me-3" type="checkbox" name="task_ids" value="{{ item.id }}">
+                        <div>
+                            <div class="fw-bold">{{ item.title }}</div>
+                            {% if item.description %}
+                            <small class="text-muted">{{ item.description|truncate(100) }}</small>
+                            {% endif %}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

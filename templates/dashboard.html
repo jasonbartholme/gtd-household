@@ -1,91 +1,58 @@
 {% extends "base.html" %}
-    {% block content %}
-    <h2 class="mb-4">Dashboard</h2>
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">{{ page_title }}</h1>
+
     <div class="row">
         <div class="col-md-4">
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-body text-center">
-                    <h5 class="text-muted small fw-bold">COMPLETED TODAY</h5>
-                    <h1 class="display-3 text-success">{{ today_completions }}</h1>
+            <div class="card mb-4">
+                <div class="card-header">System Stats</div>
+                <div class="card-body">
+                    <p><strong>Completions Today:</strong> {{ today_completions }}</p>
+                    <p><strong>Active Lists:</strong> {{ active_lists_count }}</p>
+                    <p><strong>DB Status:</strong> <span class="badge bg-{{ 'success' if health.db_connected else 'danger' }}">{{ 'Connected' if health.db_connected else 'Error' }}</span></p>
                 </div>
             </div>
-            
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary text-info small fw-bold">DATA MANAGEMENT</div>
+
+            <div class="card mb-4">
+                <div class="card-header">Admin Actions</div>
                 <div class="card-body">
-                    <p class="text-muted small mb-3">Backup or restore your household data in JSON format.</p>
-                    <a href="{{ url_for('export_data') }}" class="btn btn-sm btn-outline-info w-100 mb-3">Export JSON Backup</a>
-                    <form action="{{ url_for('import_data') }}" method="POST" enctype="multipart/form-data">
-                        <label class="text-muted small mb-1">Restore from Backup:</label>
+                    <h6 class="card-title">Data Management</h6>
+                    <form action="{{ url_for('import_data') }}" method="post" enctype="multipart/form-data" class="mb-3">
                         <div class="input-group input-group-sm">
-                            <input type="file" name="backup_file" class="form-control bg-dark text-light border-secondary" accept=".json" required>
-                            <button class="btn btn-danger" type="submit" onclick="return confirm('WARNING: This will erase all current data and replace it with the backup. Continue?');">Restore</button>
+                            <input type="file" class="form-control form-control-sm" name="backup_file">
+                            <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('WARNING: This will erase all current data and replace it with the backup. Continue?');">Restore</button>
                         </div>
                     </form>
-                </div>
-            </div>
-            
-            {% if current_user and current_user.role == 'admin' %}
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-header border-secondary text-success small fw-bold">SYSTEM HEALTH</div>
-                <div class="card-body">
-                    {% if health and health.status == 'ok' %}
-                    <div class="d-flex align-items-center mb-2">
-                        <span class="badge bg-success me-2">OK</span>
-                        <small class="text-muted">All systems nominal</small>
-                    </div>
-                    <div class="small text-muted">
-                        <div class="d-flex justify-content-between"><span>Users</span><span class="text-light fw-bold">{{ health.counts.users }}</span></div>
-                        <div class="d-flex justify-content-between"><span>Actions</span><span class="text-light fw-bold">{{ health.counts.actions }}</span></div>
-                        <div class="d-flex justify-content-between"><span>Unprocessed Inbox</span><span class="text-light fw-bold">{{ health.counts.unprocessed_inbox }}</span></div>
-                        <div class="d-flex justify-content-between"><span>Last Activity</span><span class="text-light fw-bold">{{ health.last_activity or 'none' }}</span></div>
-                    </div>
-                    {% else %}
-                    <div class="d-flex align-items-center mb-2">
-                        <span class="badge bg-danger me-2">ERROR</span>
-                        <small class="text-muted">Database or service error</small>
-                    </div>
-                    <div class="small text-danger">{{ health.error if health and health.error else 'Unknown error' }}</div>
-                    {% endif %}
-                </div>
-            </div>
-            {% endif %}
+                    <a href="{{ url_for('export_data') }}" class="btn btn-sm btn-info w-100 mb-3">Export Backup</a>
 
-            {% if current_user and current_user.role == 'admin' %}
-            <div class="card bg-dark border-danger shadow-sm mb-4">
-                <div class="card-header border-danger text-danger small fw-bold">ADMIN ACTIONS</div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-muted small">Total Active Lists:</span>
-                        <span class="text-light fw-bold">{{ active_lists_count }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between mb-3">
-                        <span class="text-muted small" data-bs-toggle="tooltip" title="Soft-deleted items older than 30 days awaiting permanent deletion.">Pending Purge Data: ℹ️</span>
-                        <span class="text-warning fw-bold">{{ purgeable_lists_count }} lists / {{ purgeable_items_count }} items</span>
-                    </div>
+                    <h6 class="card-title mt-3">Maintenance</h6>
                     {% if purgeable_lists_count > 0 or purgeable_items_count > 0 %}
                     <form action="{{ url_for('admin_purge') }}" method="POST" onsubmit="return confirm('Permanently delete stale soft-deleted data? This cannot be undone.');">
-                        <button class="btn btn-sm btn-danger w-100">Execute Hard Purge</button>
+                        <button type="submit" class="btn btn-sm btn-danger w-100 mb-2">Purge {{ purgeable_lists_count }} Lists & {{ purgeable_items_count }} Items</button>
                     </form>
-                    {% else %}
-                        <button class="btn btn-sm btn-secondary w-100" disabled>Database Clean</button>
                     {% endif %}
+                    <form action="{{ url_for('run_archive_job') }}" method="POST">
+                        <button type="submit" class="btn btn-sm btn-secondary w-100">Run Daily Archive Job</button>
+                    </form>
                 </div>
             </div>
-            {% endif %}
         </div>
         <div class="col-md-8">
-            <div class="card bg-dark border-secondary shadow-sm">
-                <div class="card-header border-secondary text-primary small fw-bold">RECENT ACTIVITY</div>
-                <ul class="list-group list-group-flush">
+            <div class="card mb-4">
+                <div class="card-header">Today's Activity</div>
+                <div class="list-group list-group-flush">
                     {% for log in activity %}
-                    <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between">
-                        <span><span class="badge bg-secondary me-2">{{ log.action_type|replace('_', ' ')|title }}</span> {{ log.description }}</span>
-                        <small class="text-muted">{{ log.timestamp.strftime('%H:%M') }}</small>
-                    </li>
+                    <div class="list-group-item">
+                        <small class="text-muted">{{ log.timestamp.strftime('%H:%M') }}</small> - {{ log.description }}
+                    </div>
+                    {% else %}
+                    <div class="list-group-item">No activity recorded yet today.</div>
                     {% endfor %}
-                </ul>
+                </div>
             </div>
         </div>
     </div>
-    {% endblock %}
+</div>
+{% endblock %}

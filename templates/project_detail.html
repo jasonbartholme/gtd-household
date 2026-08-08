@@ -1,52 +1,81 @@
 {% extends "base.html" %}
-    {% block content %}
-    <div class="mb-3"><a href="{{ url_for('manage_projects') }}" class="btn btn-sm btn-outline-secondary">&larr; Back to Projects</a></div>
-    
-    <div class="row">
-        <div class="col-md-4">
-            <div class="card bg-dark border-secondary shadow-sm mb-4">
-                <div class="card-body">
-                    <h4 class="text-info fw-bold mb-2">{{ project.name }}</h4>
-                    <span class="badge {{ 'bg-success' if project.status == 'completed' else 'bg-primary' }} mb-3">{{ project.status|title }}</span>
-                    <p class="text-muted small">{{ project.description }}</p>
-                    <hr class="border-secondary">
-                    <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST">
-                        <button type="submit" class="btn {{ 'btn-warning' if project.status == 'completed' else 'btn-success' }} w-100 btn-sm">
-                            {{ 'Reopen Project' if project.status == 'completed' else 'Mark as Completed' }}
-                        </button>
-                    </form>
-                </div>
-            </div>
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-0">{{ project.name }}</h1>
+            <p class="text-muted mb-0">Created on: {{ project.created_at.strftime('%A, %B %d, %Y') }}</p>
         </div>
-        <div class="col-md-8">
-            <div class="card bg-dark border-secondary shadow-sm h-100">
-                <div class="card-header border-secondary text-primary small fw-bold d-flex justify-content-between align-items-center">
-                    PROJECT ACTIONS
-                    <a href="{{ url_for('inbox') }}" class="btn btn-sm btn-outline-primary py-0">Capture New Action</a>
-                </div>
-                <div class="card-body p-0">
-                    <ul class="list-group list-group-flush">
-                        {% for action in project.actions %}
-                        <li class="list-group-item bg-dark text-light border-secondary d-flex justify-content-between align-items-center">
-                            <div>
-                                <a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none text-light fw-bold">{{ action.title }}</a>
-                                {% if action.context %}<span class="badge border border-secondary text-secondary ms-2 small">@{{ action.context }}</span>{% endif %}
-                            </div>
-                            <span class="badge 
-                                {% if action.status == 'done' %}bg-success
-                                {% elif action.status == 'someday' %}bg-secondary
-                                {% elif action.status == 'blocked' %}bg-danger
-                                {% elif action.status == 'in_progress' %}bg-warning text-dark
-                                {% else %}bg-info text-dark{% endif %}">
-                                {{ action.status|replace('_', ' ')|title }}
-                            </span>
-                        </li>
-                        {% else %}
-                        <li class="list-group-item bg-dark text-muted text-center py-4">No actions associated with this project. Edit a task to assign it here!</li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
+        <div>
+            <a href="{{ url_for('edit_project', id=project.id) }}" class="btn btn-secondary">Edit Project</a>
         </div>
     </div>
-    {% endblock %}
+
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Project Details</span>
+            <span class="badge bg-{{ 'success' if project.status == 'completed' else 'primary' }}">{{ project.status|title }}</span>
+        </div>
+        <div class="card-body">
+            <p>{{ project.description or 'No description provided.' }}</p>
+
+            <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" class="mt-3">
+                {% if project.status == 'active' %}
+                    <button type="submit" class="btn btn-success">Mark as Completed</button>
+                {% else %}
+                    <button type="submit" class="btn btn-info">Re-open Project</button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <h3 class="mt-5 mb-3">Associated Tasks</h3>
+    <div class="list-group" id="task-list">
+        {% for action in project.actions %}
+            <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
+                <div class="d-flex w-100 justify-left align-items-center gap-3">
+                    <small class="text-muted"><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
+                    <span class="badge bg-secondary">{{ action.status|title }}</span>
+                    <strong><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none">{{ action.title }}</a></strong>
+                    <span class="text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</span>
+                </div>
+            </div>
+        {% else %}
+            <div class="list-group-item">No tasks associated with this project yet.</div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Include SortableJS from a CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var el = document.getElementById('task-list');
+    if (el) {
+        var sortable = Sortable.create(el, {
+            animation: 150,
+            handle: '.bi-grip-vertical',
+            onEnd: function (evt) {
+                var items = el.children;
+                var order = [];
+                for (var i = 0; i < items.length; i++) {
+                    order.push({
+                        id: items[i].getAttribute('data-id'),
+                        sort_order: i
+                    });
+                }
+
+                fetch("{{ url_for('reorder_project_tasks', id=project.id) }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ order: order })
+                });
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,132 +1,136 @@
 {% extends "base.html" %}
-    {% block content %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">{{ page_title }}</h1>
+        <span class="badge bg-primary rounded-pill fs-6">{{ inbox_items|length }}</span>
+    </div>
+
     <div class="row">
-        <div class="col-lg-4">
-            <div class="card bg-dark border-secondary shadow mb-4">
-                <div class="card-header border-secondary p-0">
-                    <ul class="nav nav-tabs card-header-tabs m-0" style="border-bottom: none;">
-                        <li class="nav-item"><button class="nav-link active text-primary fw-bold" data-bs-toggle="tab" data-bs-target="#single" type="button">Single Item</button></li>
-                        <li class="nav-item"><button class="nav-link text-primary fw-bold" data-bs-toggle="tab" data-bs-target="#bulk" type="button">Bulk Dump</button></li>
-                    </ul>
-                </div>
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">Capture New Items</div>
                 <div class="card-body">
-                    <div class="tab-content">
-                        <!-- Single Capture Tab -->
-                        <div class="tab-pane fade show active" id="single">
-                            <form action="{{ url_for('add_inbox') }}" method="POST">
-                                <div class="mb-3">
-                                    <label class="form-label small text-muted" data-bs-toggle="tooltip" title="Brain Dump: Get every 'open loop' out of your head immediately." style="cursor: help;">What's on your mind? ℹ️</label>
-                                    <input type="text" name="title" class="form-control bg-dark text-light border-secondary" placeholder="Fix leaky faucet..." required autofocus>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small text-muted">Context (Optional)</label>
-                                    <input type="text" name="context" class="form-control bg-dark text-light border-secondary" placeholder="e.g. Garage, Kitchen, PC">
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small text-muted">Details (Optional)</label>
-                                    <textarea name="note" class="form-control bg-dark text-light border-secondary" rows="3"></textarea>
-                                </div>
-                                <button type="submit" class="btn btn-primary w-100">Capture to Inbox</button>
-                            </form>
+                    <form action="{{ url_for('add_inbox') }}" method="POST">
+                        <div class="mb-3">
+                            <input type="text" name="title" class="form-control" placeholder="Capture a thought..." required>
                         </div>
-                        
-                        <!-- Bulk Capture Tab -->
-                        <div class="tab-pane fade" id="bulk">
-                            <form action="{{ url_for('add_inbox_bulk') }}" method="POST">
-                                <div class="mb-3">
-                                    <label class="form-label small text-muted">Items (One per line)</label>
-                                    <textarea name="bulk_items" class="form-control bg-dark text-light border-secondary" rows="6" placeholder="Sweep floor&#10;Organize workbench&#10;Check oil in mower" required></textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label small text-muted">Apply Context to All</label>
-                                    <input type="text" name="context" class="form-control bg-dark text-light border-secondary" placeholder="e.g. Garage">
-                                </div>
-                                <button type="submit" class="btn btn-warning w-100 text-dark fw-bold">Bulk Capture</button>
-                            </form>
-                        </div>
-                    </div>
+                        <button type="submit" class="btn btn-primary w-100">Capture</button>
+                    </form>
                 </div>
             </div>
         </div>
-        <div class="col-lg-8">
-            <h4 class="mb-3">Unprocessed Inbox <span class="badge bg-primary rounded-pill small">{{ inbox_items|length }}</span></h4>
+        <div class="col-md-8">
+            <h4 class="mb-3">Items to Process</h4>
+            {% if inbox_items %}
             <div class="list-group">
                 {% for item in inbox_items %}
-                <div class="list-group-item bg-dark border-secondary text-light mb-2 rounded shadow-sm">
-                    <div class="d-flex w-100 justify-content-between align-items-start">
-                        <div>
-                            <h5 class="mb-1 h6">
-                                {{ item.title }}
-                                {% if item.context %}<span class="badge border border-info text-info ms-2 small">@{{ item.context }}</span>{% endif %}
-                            </h5>
-                            <p class="mb-2 text-muted small">{{ item.note or '' }}</p>
-                            <button type="button" class="btn btn-sm btn-outline-success px-3" data-bs-toggle="modal" data-bs-target="#processModal{{ item.id }}">Process</button>
-                        </div>
-                        <small class="text-muted">{{ item.created_at.strftime('%H:%M') }}</small>
-                    </div>
-                </div>
-                <div class="modal fade" id="processModal{{ item.id }}" tabindex="-1">
-                  <div class="modal-dialog">
-                    <div class="modal-content bg-dark text-light border-secondary">
-                      <form action="{{ url_for('process_inbox', item_id=item.id) }}" method="POST">
-                          <div class="modal-header border-secondary"><h5 class="modal-title">Clarify Item</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-                          <div class="modal-body">
-                            <div class="mb-3"><label class="small text-muted">Title</label><input type="text" name="title" class="form-control bg-dark text-light border-secondary" value="{{ item.title }}" required></div>
-                            
-                            <div class="row g-2 mb-3">
-                                <div class="col-6">
-                                    <label class="small text-muted" data-bs-toggle="tooltip" title="Assign to a larger multi-step outcome." style="cursor: help;">Project ℹ️</label>
-                                    <select name="project_id" class="form-select bg-dark text-light border-secondary">
-                                        <option value="">-- No Project --</option>
-                                        {% for p in all_projects %}
-                                        <option value="{{ p.id }}">{{ p.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-6">
-                                    <label class="small text-muted" data-bs-toggle="tooltip" title="Ready goes to Kanban. Someday hides it." style="cursor: help;">Initial Status ℹ️</label>
-                                    <select name="status" class="form-select bg-dark text-light border-secondary">
-                                        <option value="ready">Ready (Active Board)</option>
-                                        <option value="someday">Someday / Maybe (Incubator)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="row g-2 mb-3">
-                                <div class="col-4"><label class="small text-muted">Type</label>
-                                    <select name="item_type" class="form-select bg-dark text-light border-secondary">
-                                        <option value="task">Task</option><option value="chore">Chore</option><option value="errand">Errand</option>
-                                    </select>
-                                </div>
-                                <div class="col-4"><label class="small text-muted">Chorenado</label>
-                                    <select name="complexity_fib" class="form-select bg-dark text-light border-secondary">
-                                        <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option>
-                                    </select>
-                                </div>
-                                <div class="col-4"><label class="small text-muted">Context</label>
-                                    <input type="text" name="context" class="form-control bg-dark text-light border-secondary" value="{{ item.context or '' }}">
-                                </div>
-                            </div>
-                            <div class="row g-2 mb-3">
-                                <div class="col-6"><label class="small text-muted">Due Date</label><input type="date" name="due_date" class="form-control bg-dark text-light border-secondary"></div>
-                                <div class="col-6"><label class="small text-muted">Recur Every</label>
-                                    <div class="input-group">
-                                        <input type="number" name="recur_interval" class="form-control bg-dark text-light border-secondary" placeholder="0">
-                                        <select name="recur_unit" class="form-select bg-dark text-light border-secondary">
-                                            <option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mb-3"><label class="small text-muted">Description</label><textarea name="description" class="form-control bg-dark text-light border-secondary" rows="3">{{ item.note }}</textarea></div>
-                          </div>
-                          <div class="modal-footer border-secondary"><button type="submit" class="btn btn-success w-100">Process Action</button></div>
-                      </form>
-                    </div>
-                  </div>
-                </div>
+                <button type="button" class="list-group-item list-group-item-action" data-bs-toggle="modal" data-bs-target="#processModal-{{ item.id }}">
+                    {{ item.title }}
+                    <small class="text-muted d-block">Captured: {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                </button>
                 {% endfor %}
             </div>
+            {% else %}
+            <div class="card card-body text-center">
+                <h5 class="mb-0">🎉 Inbox Zero!</h5>
+                <p class="text-muted mb-0">Your mind is clear. Great job!</p>
+            </div>
+            {% endif %}
         </div>
     </div>
-    {% endblock %}
+</div>
+
+<!-- Modals for each item -->
+{% for item in inbox_items %}
+<div class="modal fade" id="processModal-{{ item.id }}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form action="{{ url_for('process_inbox', item_id=item.id) }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Clarifying: {{ item.title }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Title</label>
+                            <input type="text" name="title" class="form-control" value="{{ item.title }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Project</label>
+                            <select name="project_id" class="form-select">
+                                <option value="">None</option>
+                                {% for proj in all_projects %}
+                                <option value="{{ proj.id }}">{{ proj.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description / Notes</label>
+                        <textarea name="description" class="form-control" rows="4">{{ item.note or '' }}</textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select">
+                                <option value="icebox" selected>Icebox</option>
+                                <option value="ready">Ready</option>
+                                <option value="someday">Someday/Maybe</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Type</label>
+                            <select name="item_type" class="form-select">
+                                <option value="task" selected>Task</option>
+                                <option value="chore">Chore</option>
+                                <option value="errand">Errand</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Complexity</label>
+                            <select name="complexity_fib" class="form-select">
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                                <option value="8">8</option>
+                            </select>
+                        </div>
+                    </div>
+                     <div class="mb-3">
+                        <label class="form-label">Context</label>
+                        <input type="text" name="context" class="form-control" value="{{ item.context or '' }}">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" name="submit_action" value="save_close" class="btn btn-secondary">Save & Close</button>
+                    <button type="submit" name="submit_action" value="save_next" class="btn btn-primary">Save & Next</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Check for a 'next' URL parameter to auto-open a modal
+    const urlParams = new URLSearchParams(window.location.search);
+    const nextItemId = urlParams.get('next');
+
+    if (nextItemId) {
+        const modalElement = document.getElementById('processModal-' + nextItemId);
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+
+            // Clean the URL so refreshing doesn't re-trigger the modal
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    }
+});
+</script>
+{% endblock %}

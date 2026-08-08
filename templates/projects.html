@@ -26,6 +26,14 @@
                     <div class="progress" style="height: 6px; background-color: #373b3e;">
                         <div class="progress-bar bg-info" role="progressbar" style="width: {{ percent }}%;"></div>
                     </div>
+
+                    {% set next_task = proj.actions|rejectattr('status', 'equalto', 'done')|first %}
+                    {% if next_task %}
+                    <div class="mt-3 pt-2 border-top border-secondary-subtle">
+                        <span class="badge bg-primary-subtle text-primary-emphasis">Next</span>
+                        <a href="{{ url_for('edit_action', id=next_task.id) }}" class="text-decoration-none small ms-2">{{ next_task.title }}</a>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

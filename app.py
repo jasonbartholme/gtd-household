@@ -2,6 +2,7 @@ import calendar
 import os
 from datetime import datetime, date, timedelta
 from flask import Flask, request, redirect, url_for, session, flash, render_template, jsonify
+from flask_apscheduler import APScheduler
 from flask_sqlalchemy import SQLAlchemy
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,22 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gtd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
+scheduler = APScheduler()
+
+def archive_done_tasks_job():
+    """Find tasks in 'done' status and move them to 'archived'."""
+    with app.app_context():
+        print("Running daily archive job...")
+        tasks_to_archive = ActionItem.query.filter_by(status='done').all()
+        if tasks_to_archive:
+            for task in tasks_to_archive:
+                task.status = 'archived'
+            db.session.commit()
+            print(f"Archived {len(tasks_to_archive)} tasks.")
+        else:
+            print("No tasks to archive.")
+
+PER_PAGE = 10 # Constant for pagination
 
 def get_local_now():
     """Returns current time in Central Time (US/Chicago) as a naive datetime for SQLite."""
@@ -45,7 +62,7 @@ class Project(db.Model):
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
 
-    actions = db.relationship('ActionItem', backref='project', lazy=True)
+    actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
 
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -80,14 +97,15 @@ class ActionItem(db.Model):
     title = db.Column(db.String(200), nullable=False)
     context = db.Column(db.String(100), nullable=True)
     description = db.Column(db.Text, nullable=True)
-    item_type = db.Column(db.String(20), default='task') # task, chore, errand
-    status = db.Column(db.String(20), default='ready') # ready, in_progress, blocked, done, waiting, someday
+    item_type = db.Column(db.String(20), default='task') # task, chore, errand,
+    status = db.Column(db.String(20), default='icebox') # icebox, ready, in_progress, blocked, done, waiting, someday, archived
     complexity_fib = db.Column(db.Integer, default=1)
     base_points = db.Column(db.Integer, default=10)
     owner_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
     due_date = db.Column(db.DateTime, nullable=True)
+    sort_order = db.Column(db.Integer, default=0)
 
     is_recurring = db.Column(db.Boolean, default=False)
     recur_interval = db.Column(db.Integer, default=1)
@@ -216,11 +234,31 @@ def inject_global_data():
         'assets': 'Assets',
         'supplies': 'Supplies',
         'project_detail': 'Project Details',
+        'edit_project': 'Edit Project',
         'view_list': 'List Details',
         'asset_detail': 'Asset Details',
-        'manage_users': 'Users'
+        'manage_users': 'Users',
+        'archive_view': 'Archive',
+        'run_archive_job': 'Run Archive Job' # For manual trigger
     }
     page_title = endpoints.get(request.endpoint, '')
+
+    nav_links = {
+        'Core': {
+            'kanban': 'Board',
+            'inbox': 'Inbox',
+            'review': 'Review',
+        'icebox_view': 'Icebox',
+            'calendar_view': 'Calendar',
+        },
+        'Management': {
+            'manage_projects': 'Projects',
+            'manage_lists': 'Lists',
+            'assets': 'Assets',
+            'supplies': 'Supplies',
+            'archive_view': 'Archive',
+        }
+    }
 
     return dict(
         current_user=current_user,
@@ -228,7 +266,8 @@ def inject_global_data():
         all_projects=all_projects,
         today=get_local_now().date(),
         unproc_inbox=unproc_inbox,
-        page_title=page_title
+        page_title=page_title,
+        nav_links=nav_links
     )
 first_run = True
 
@@ -289,6 +328,29 @@ def calculate_next_due_date(current_date, interval, unit):
         return current_date.replace(year=year, month=month)
     return current_date
 
+def run_migrations():
+    """One-time or idempotent migrations to run on startup."""
+    from sqlalchemy import inspect
+    from sqlalchemy.sql import text
+
+    inspector = inspect(db.engine)
+    action_item_columns = [c['name'] for c in inspector.get_columns('action_item')]
+
+    with db.session.begin() as session:
+        # Migration 1: Add sort_order column to action_item if it doesn't exist
+        if 'sort_order' not in action_item_columns:
+            print("Adding 'sort_order' column to 'action_item' table...")
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN sort_order INTEGER DEFAULT 0'))
+            print("'sort_order' column added.")
+
+        # Migration 2: Change existing 'ready' tasks to 'icebox'
+        ready_tasks = db.session.query(ActionItem).filter_by(status='ready').all()
+        if ready_tasks:
+            print(f"Migrating {len(ready_tasks)} 'ready' tasks to 'icebox' status...")
+            for task in ready_tasks:
+                task.status = 'icebox'
+            print("Migration complete.")
+
 # ==========================================
 # 5. ROUTES
 # ==========================================
@@ -333,13 +395,16 @@ def health():
 @app.route('/')
 def kanban():
     hid = session.get('household_id')
-    items = ActionItem.query.filter(ActionItem.household_id==hid, ActionItem.status != 'someday').order_by(ActionItem.created_at.desc()).all()
+    items = ActionItem.query.filter(
+        ActionItem.household_id==hid,
+        ActionItem.status.notin_(['someday', 'archived', 'icebox'])
+    ).order_by(ActionItem.created_at.desc()).all()
     return render_template("kanban.html", items=items)
 
 @app.route('/projects')
 def manage_projects():
     hid = session.get('household_id')
-    projects = Project.query.filter_by(household_id=hid).order_by(Project.status, Project.created_at.desc()).all()
+    projects = Project.query.filter_by(household_id=hid, status='active').order_by(Project.created_at.desc()).all()
     return render_template('projects.html', projects=projects)
 
 @app.route('/projects/add', methods=['POST'])
@@ -358,6 +423,35 @@ def add_project():
 def project_detail(id):
     project = db.session.get(Project, id)
     return render_template('project_detail.html', project=project)
+
+@app.route('/projects/<int:id>/reorder_tasks', methods=['POST'])
+def reorder_project_tasks(id):
+    project = db.session.get(Project, id)
+    if not project or project.household_id != session.get('household_id'):
+        return jsonify(success=False, message="Project not found"), 404
+
+    order_data = request.json.get('order', [])
+    for data in order_data:
+        db.session.query(ActionItem).filter_by(id=int(data['id']), project_id=id).update({'sort_order': int(data['sort_order'])})
+    db.session.commit()
+    return jsonify(success=True)
+
+@app.route('/projects/<int:id>/edit', methods=['GET', 'POST'])
+def edit_project(id):
+    project = db.session.get(Project, id)
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for('manage_projects'))
+
+    if request.method == 'POST':
+        project.name = request.form.get('name')
+        project.description = request.form.get('description')
+        db.session.commit()
+        log_activity(session.get('user_id'), 'edit_project', f"Updated project: {project.name}")
+        flash(f"Project '{project.name}' updated successfully.", "success")
+        return redirect(url_for('project_detail', id=id))
+
+    return render_template('project_edit.html', project=project)
 
 @app.route('/projects/<int:id>/toggle', methods=['POST'])
 def toggle_project_status(id):
@@ -382,7 +476,7 @@ def someday_view():
 @app.route('/someday/<int:id>/activate', methods=['POST'])
 def activate_someday(id):
     item = db.session.get(ActionItem, id)
-    item.status = 'ready'
+    item.status = 'icebox'
     db.session.commit()
     flash(f"Activated '{item.title}'! It is now on your active Kanban board.", "success")
     return redirect(url_for('someday_view'))
@@ -427,12 +521,19 @@ def process_inbox(item_id):
     is_recurring = bool(interval and int(interval) > 0)
 
     project_id = request.form.get('project_id')
-    status = request.form.get('status', 'ready')
+    project_id = int(project_id) if project_id else None
+    status = request.form.get('status', 'icebox')
+
+    sort_order = 0
+    if project_id:
+        highest = ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
+        sort_order = (highest.sort_order + 1) if highest else 0
 
     action = ActionItem(
         household_id=session['household_id'],
         title=request.form.get('title'),
         description=request.form.get('description'),
+        sort_order=sort_order,
         item_type=request.form.get('item_type'),
         complexity_fib=int(request.form.get('complexity_fib')),
         context=request.form.get('context'),
@@ -448,12 +549,26 @@ def process_inbox(item_id):
     inbox_item.processed_at = get_local_now()
     db.session.commit()
 
-    if status == 'someday':
-        flash("Action sent to Someday incubator.", "info")
-    else:
-        flash("Action added to board.", "success")
+    submit_action = request.form.get('submit_action')
 
-    return redirect(url_for('kanban'))
+    if submit_action == 'save_next':
+        # Find the next available inbox item to process
+        next_item = InboxItem.query.filter(
+            InboxItem.household_id == session['household_id'],
+            InboxItem.processed_at == None
+        ).order_by(InboxItem.created_at.asc()).first()
+
+        if next_item:
+            flash(f"Processed '{inbox_item.title}'. Next up: '{next_item.title}'.", "success")
+            # Redirect back to the inbox, with a query param to auto-open the next modal
+            return redirect(url_for('inbox', next=next_item.id))
+        else:
+            flash("Processed the last item. Inbox zero!", "success")
+            return redirect(url_for('inbox'))
+    else:
+        flash(f"Processed '{inbox_item.title}'.", "success")
+        # Default "Save and Close" behavior
+        return redirect(url_for('inbox'))
 
 @app.route('/action/<int:id>/edit', methods=['GET', 'POST'])
 def edit_action(id):
@@ -467,6 +582,12 @@ def edit_action(id):
         action.status = request.form.get('status')
         project_id = request.form.get('project_id')
         action.project_id = int(project_id) if project_id else None
+
+        # If project is being set or changed, update sort order
+        if action.project_id:
+            highest = ActionItem.query.filter_by(project_id=action.project_id).order_by(ActionItem.sort_order.desc()).first()
+            action.sort_order = (highest.sort_order + 1) if highest else 0
+
         action.is_recurring = 'is_recurring' in request.form
         action.recur_interval = int(request.form.get('recur_interval') or 1)
         action.recur_unit = request.form.get('recur_unit')
@@ -491,9 +612,8 @@ def edit_action(id):
 def update_status(item_id):
     action = db.session.get(ActionItem, item_id)
     new_status = request.get_json().get('status')
-    respawned = False
-
-    if new_status in ['ready', 'in_progress', 'blocked', 'done']:
+    respawned = False # Default value
+    if new_status in ['icebox', 'ready', 'in_progress', 'blocked', 'done']:
         action.status = new_status
         if new_status == 'done':
             action.completed_at = get_local_now()
@@ -502,6 +622,12 @@ def update_status(item_id):
 
             if action.is_recurring:
                 new_due = calculate_next_due_date(action.due_date or get_local_now(), action.recur_interval, action.recur_unit)
+                
+                sort_order = 0
+                if action.project_id:
+                    highest = ActionItem.query.filter_by(project_id=action.project_id).order_by(ActionItem.sort_order.desc()).first()
+                    sort_order = (highest.sort_order + 1) if highest else 0
+
                 new_action = ActionItem(
                     household_id=action.household_id,
                     title=action.title,
@@ -514,7 +640,8 @@ def update_status(item_id):
                     recur_interval=action.recur_interval,
                     recur_unit=action.recur_unit,
                     due_date=new_due,
-                    status='ready'
+                    status='icebox',
+                    sort_order=sort_order
                 )
                 new_action.assets = action.assets
                 new_action.supplies = action.supplies
@@ -526,6 +653,31 @@ def update_status(item_id):
         db.session.commit()
         return jsonify(success=True, respawned=respawned)
     return jsonify(success=False), 400
+
+@app.route('/icebox', methods=['GET', 'POST'])
+def icebox_view():
+    hid = session.get('household_id')
+
+    if request.method == 'POST':
+        task_ids_to_move = request.form.getlist('task_ids')
+        if task_ids_to_move:
+            ActionItem.query.filter(ActionItem.id.in_(task_ids_to_move), ActionItem.household_id == hid)\
+                .update({ActionItem.status: 'ready'}, synchronize_session=False)
+            db.session.commit()
+            flash(f"Moved {len(task_ids_to_move)} tasks to the 'Ready' column on the board.", "success")
+            log_activity(session.get('user_id'), 'bulk_move_to_ready', f"Moved {len(task_ids_to_move)} tasks from Icebox to Ready.")
+        return redirect(url_for('icebox_view'))
+
+    # GET request
+    icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox').order_by(ActionItem.project_id, ActionItem.created_at).all()
+
+    # Group by project
+    from itertools import groupby
+    grouped_items = {}
+    for k, g in groupby(icebox_items, key=lambda item: item.project):
+        grouped_items[k] = list(g)
+
+    return render_template('icebox.html', grouped_items=grouped_items)
 
 @app.route('/review')
 def review():
@@ -1033,6 +1185,49 @@ def edit_user(id):
         flash(f"Updated user: {u.name}", "success")
     return redirect(url_for('manage_users'))
 
+@app.route('/archive')
+def archive_view():
+    hid = session.get('household_id')
+    page = request.args.get('page', 1, type=int)
+    q = request.args.get('q', '').strip()
+
+    # Query for completed ActionItems
+    action_query = ActionItem.query.filter_by(household_id=hid, status='archived')
+    if q:
+        # Join with Project to search project name, using isouter=True to include actions without projects
+        action_query = action_query.join(Project, ActionItem.project_id == Project.id, isouter=True).filter(
+            (ActionItem.title.ilike(f'%{q}%')) |
+            (ActionItem.description.ilike(f'%{q}%')) |
+            (Project.name.ilike(f'%{q}%'))
+        )
+    archived_actions = action_query.order_by(ActionItem.completed_at.desc()).paginate(page=page, per_page=PER_PAGE, error_out=False)
+
+    # Query for completed Projects
+    project_query = Project.query.filter_by(household_id=hid, status='completed')
+    if q:
+        project_query = project_query.filter(
+            (Project.name.ilike(f'%{q}%')) |
+            (Project.description.ilike(f'%{q}%'))
+        )
+    completed_projects = project_query.order_by(Project.completed_at.desc()).paginate(page=page, per_page=PER_PAGE, error_out=False)
+
+    return render_template('archive.html',
+                           archived_actions=archived_actions,
+                           completed_projects=completed_projects,
+                           q=q,
+                           current_page=page,
+                           per_page=PER_PAGE,
+                           action_endpoint='archive_view', # For pagination links
+                           project_endpoint='archive_view' # For pagination links
+                           )
+
+@app.route('/admin/run_archive_job', methods=['POST'])
+def run_archive_job():
+    """Manually trigger the archive job."""
+    archive_done_tasks_job()
+    flash("Manually triggered archive job.", "info")
+    return redirect(url_for('dashboard'))
+
 @app.route('/switch_user', methods=['POST'])
 def switch_user():
     user = db.session.get(User, request.form.get('user_id'))
@@ -1043,5 +1238,8 @@ def switch_user():
 
 if __name__ == '__main__':
     with app.app_context():
+        run_migrations()
         setup_db()
+    scheduler.init_app(app)
+    scheduler.start()
     app.run(host='0.0.0.0', port=5000, debug=True)
