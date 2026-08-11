@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">{{ page_title }}</h1>
+
+    <div class="row g-4">
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100">
+                <div class="card-header">System Status</div>
+                <div class="card-body">
+                    <p class="d-flex justify-content-between"><span>Active Lists:</span> <strong>{{ active_lists_count }}</strong></p>
+                    <p class="d-flex justify-content-between mb-0"><span>DB Status:</span> <span class="badge bg-{{ 'success' if health.db_connected else 'danger' }}">{{ 'Connected' if health.db_connected else 'Error' }}</span></p>
+                    {% if health.status == 'ok' %}
+                        <hr>
+                        <p class="mb-0 small text-muted">Last Activity: {{ health.last_activity or 'N/A' }}</p>
+                    {% else %}
+                        <p class="text-danger mb-0 small">Error: {{ health.error }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Admin Actions</div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <h6 class="card-title text-muted mb-0">Data Management</h6>
+                        <a href="{{ url_for('export_data') }}" class="btn btn-sm btn-info">Export Backup</a>
+                        <form action="{{ url_for('import_data') }}" method="post" enctype="multipart/form-data">
+                            <div class="input-group input-group-sm">
+                                <input type="file" class="form-control form-control-sm" name="backup_file" required>
+                                <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('WARNING: This will erase all current data and replace it with the backup. Continue?');">Restore</button>
+                            </div>
+                        </form>
+                        <hr>
+                        <h6 class="card-title text-muted mb-0">Maintenance</h6>
+                        {% if purgeable_lists_count > 0 or purgeable_items_count > 0 %}
+                        <form action="{{ url_for('admin_purge') }}" method="POST" onsubmit="return confirm('Permanently delete stale soft-deleted data? This cannot be undone.');">
+                            <button type="submit" class="btn btn-sm btn-danger w-100">Purge {{ purgeable_lists_count }} Lists & {{ purgeable_items_count }} Items</button>
+                        </form>
+                        {% endif %}
+                        <form action="{{ url_for('run_archive_job') }}" method="POST">
+                            <button type="submit" class="btn btn-sm btn-secondary w-100">Run Daily Archive Job</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Future Settings</div>
+                <div class="card-body">
+                    <p class="text-muted small">This area can be expanded with more application-wide settings.</p>
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item bg-transparent">Default Task Status</li>
+                        <li class="list-group-item bg-transparent">Notification Preferences</li>
+                        <li class="list-group-item bg-transparent">Theme Selection</li>
+                        <li class="list-group-item bg-transparent">API & Integrations</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

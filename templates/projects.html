@@ -5,7 +5,8 @@
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addProjectModal">+ New Project</button>
     </div>
     <div class="row g-3">
-        {% for proj in projects %}
+        {% for data in projects_data %}
+        {% set proj = data.project %}
         <div class="col-md-6">
             <div class="card bg-dark border-secondary shadow-sm h-100 card-hover">
                 <div class="card-body">
@@ -15,16 +16,12 @@
                     </div>
                     <p class="text-muted small mb-3">{{ proj.description[:100] if proj.description else 'No description provided.' }}</p>
                     
-                    {% set total_actions = proj.actions|length %}
-                    {% set done_actions = proj.actions|selectattr('status', 'equalto', 'done')|list|length %}
-                    {% set percent = (done_actions / total_actions * 100)|round|int if total_actions > 0 else 0 %}
-                    
                     <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
-                        <span>Progress</span>
-                        <span>{{ done_actions }} / {{ total_actions }} Tasks</span>
+                        <span>Progress: {{ data.percentage_completed }}%</span>
+                        <span class="text-success fw-bold">${{ "%.2f"|format(data.total_cost) }}</span>
                     </div>
                     <div class="progress" style="height: 6px; background-color: #373b3e;">
-                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ percent }}%;"></div>
+                        <div class="progress-bar bg-info" role="progressbar" style="width: {{ data.percentage_completed }}%;"></div>
                     </div>
 
                     {% set next_task = proj.actions|rejectattr('status', 'equalto', 'done')|first %}

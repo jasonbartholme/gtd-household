@@ -12,24 +12,16 @@
         </div>
     </div>
 
-    {% if project_expense_total > 0 %}
-    <div class="alert alert-info mt-3 mb-4">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <strong>Project Expense Total</strong>
-                <div class="text-muted small">Associated with this project</div>
-            </div>
-            <span class="badge bg-success fs-6">${{ "%.2f"|format(project_expense_total) }}</span>
-        </div>
-    </div>
-    {% endif %}
-
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span>Project Details</span>
-            <span class="badge bg-{{ 'success' if project.status == 'completed' else 'primary' }}">{{ project.status|title }}</span>
+            <div>
+                <span class="badge bg-{{ 'success' if project.status == 'completed' else 'primary' }}">{{ project.status|title }}</span>
+                <span class="badge bg-info ms-2">{{ percentage_completed }}% Completed</span>
+            </div>
         </div>
         <div class="card-body">
+            <h5 class="card-title text-success">Total Expenses: ${{ "%.2f"|format(project_expense_total) }}</h5>
             <p>{{ project.description or 'No description provided.' }}</p>
 
             <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" class="mt-3">
@@ -42,47 +34,43 @@
         </div>
     </div>
 
-    <h3 class="mt-5 mb-3">Associated Tasks</h3>
+    <h3 class="mt-5 mb-3">Project Tasks</h3>
     <div class="list-group" id="task-list">
         {% for action in project.actions %}
             <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
-                <div class="d-flex w-100 justify-left align-items-center gap-3">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none">{{ action.title }}</a></h5>
                     <small class="text-muted"><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
-                    <span class="badge bg-secondary">{{ action.status|title }}</span>
-                    <strong><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none">{{ action.title }}</a></strong>
-                    <span class="text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</span>
                 </div>
+                <p class="mb-1 text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</p>
+                <span class="badge bg-secondary">{{ action.status|title }}</span>
             </div>
         {% else %}
             <div class="list-group-item">No tasks associated with this project yet.</div>
         {% endfor %}
     </div>
 
-    <div class="card mt-4">
-        <div class="card-header">
-            <span>Associated Expenses</span>
-        </div>
+    <h3 class="mt-5 mb-3">Associated Expenses</h3>
+    <div class="card">
         <div class="list-group list-group-flush">
             {% for expense in project_expenses %}
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ expense.description or 'Expense' }}</strong>
-                            <div class="text-muted small">{{ expense.date.strftime('%Y-%m-%d') if expense.date else 'No date' }}</div>
-                        </div>
-                        <div class="text-end">
-                            <span class="badge bg-success">${{ "%.2f"|format(expense.amount) }}</span>
-                            {% if expense.source %}
-                                <div class="text-muted small">{{ expense.source }}</div>
-                            {% endif %}
-                        </div>
+            <div class="list-group-item">
+                <div class="d-flex w-100 justify-content-between">
+                    <div>
+                        <strong class="d-block">{{ expense.description }}</strong>
+                        <small class="text-muted">{{ expense.date.strftime('%Y-%m-%d') }} | {{ expense.source or 'N/A' }}</small>
                     </div>
+                    <span class="badge bg-success fs-6 align-self-center">${{ "%.2f"|format(expense.amount) }}</span>
                 </div>
+            </div>
             {% else %}
-                <div class="list-group-item text-muted">No expenses associated with this project yet.</div>
+            <div class="list-group-item text-center text-muted">
+                No expenses have been logged for this project.
+            </div>
             {% endfor %}
         </div>
     </div>
+
 </div>
 
 <!-- Include SortableJS from a CDN -->

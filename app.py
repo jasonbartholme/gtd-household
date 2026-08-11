@@ -234,6 +234,7 @@ def inject_global_data():
         'leaderboard': 'Leaderboard',
         'kanban': 'Board',
         'inbox': 'Inbox',
+        'today_done_view': 'Today\'s Done',
         'review': 'Review',
         'manage_projects': 'Projects',
         'manage_lists': 'Lists',
@@ -247,7 +248,8 @@ def inject_global_data():
         'asset_detail': 'Asset Details',
         'manage_users': 'Users',
         'archive_view': 'Archive',
-        'run_archive_job': 'Run Archive Job' # For manual trigger
+        'run_archive_job': 'Run Archive Job', # For manual trigger
+        'settings_view': 'Settings'
     }
     page_title = endpoints.get(request.endpoint, '')
 
@@ -257,7 +259,11 @@ def inject_global_data():
             'inbox': 'Inbox',
             'review': 'Review',
             'icebox_view': 'Icebox',
-            'calendar_view': 'Calendar', # This will default to grid view
+        },
+        'Reports': {
+            'today_done_view': 'Today\'s Done',
+            'leaderboard': 'Leaderboard',
+            'calendar_view': 'Calendar',
         },
         'Management': {
             'manage_projects': 'Projects',
@@ -266,6 +272,9 @@ def inject_global_data():
             'assets': 'Assets',
             'supplies': 'Supplies',
             'archive_view': 'Archive',
+        },
+        'Admin': {
+            'settings_view': 'Settings',
         }
     }
 
@@ -373,7 +382,6 @@ def run_migrations():
             db.session.execute(text('ALTER TABLE expense ADD COLUMN source VARCHAR(100)'))
             db.session.execute(text('ALTER TABLE expense ADD COLUMN url VARCHAR(500)'))
 
-        # Migration 5: Add notes column to expense table
         if 'notes' not in expense_columns:
             print("Adding 'notes' column to 'expense' table...")
             db.session.execute(text('ALTER TABLE expense ADD COLUMN notes TEXT'))
@@ -433,7 +441,21 @@ def kanban():
 def manage_projects():
     hid = session.get('household_id')
     projects = Project.query.filter_by(household_id=hid, status='active').order_by(Project.created_at.desc()).all()
-    return render_template('projects.html', projects=projects)
+
+    projects_data = []
+    for proj in projects:
+        total_actions = len(proj.actions)
+        completed_actions = sum(1 for action in proj.actions if action.status in ['done', 'archived'])
+        percentage_completed = (completed_actions / total_actions * 100) if total_actions > 0 else 0
+
+        total_cost = db.session.query(db.func.sum(Expense.amount)).filter_by(project_id=proj.id).scalar() or 0
+
+        projects_data.append({
+            'project': proj,
+            'percentage_completed': round(percentage_completed),
+            'total_cost': total_cost
+        })
+    return render_template('projects.html', projects_data=projects_data)
 
 @app.route('/projects/add', methods=['POST'])
 def add_project():
@@ -453,18 +475,24 @@ def project_detail(id):
     project = db.session.get(Project, id)
     project_expenses = []
     project_expense_total = 0.0
+    percentage_completed = 0
+
+    if not project:
+        flash("Project not found.", "danger")
+        return redirect(url_for('manage_projects'))
 
     if project:
         project_expenses = project.expenses.order_by(Expense.date.desc()).all()
         project_expense_total = sum(expense.amount for expense in project_expenses)
+        total_actions = len(project.actions)
+        completed_actions = sum(1 for action in project.actions if action.status in ['done', 'archived'])
+        percentage_completed = (completed_actions / total_actions * 100) if total_actions > 0 else 0
 
-    return render_template(
-        'project_detail.html',
-        project=project,
-        project_expenses=project_expenses,
-        project_expense_total=project_expense_total
-    )
-
+    return render_template('project_detail.html',
+                           project=project,
+                           project_expenses=project_expenses,
+                           project_expense_total=project_expense_total,
+                           percentage_completed=round(percentage_completed))
 @app.route('/projects/<int:id>/reorder_tasks', methods=['POST'])
 def reorder_project_tasks(id):
     project = db.session.get(Project, id)
@@ -808,20 +836,40 @@ def review():
     return render_template('review.html', inbox_count=inbox_count, someday_count=someday_count, waiting_items=waiting, recurring_items=active_recurring)
 
 @app.route('/dashboard')
-def dashboard():
+def dashboard(): # User's summary with today's actions from the log
     today = get_local_now().date()
     activity = ActivityLog.query.filter(ActivityLog.timestamp >= today).order_by(ActivityLog.timestamp.desc()).all()
     completions = ActionItem.query.filter(ActionItem.completed_at >= today).count()
 
+    return render_template('dashboard.html', activity=activity, today_completions=completions)
+
+@app.route('/settings')
+def settings_view():
     hid = session.get('household_id')
-    active_lists_count = HouseholdList.query.filter_by(household_id=hid, is_deleted=False).count() if hid else 0
 
-    purge_cutoff = get_local_now() - timedelta(days=30)
-    purgeable_lists_count = HouseholdList.query.filter(HouseholdList.household_id == hid, HouseholdList.is_deleted == True, HouseholdList.deleted_at <= purge_cutoff).count() if hid else 0
-    purgeable_items_count = ListItem.query.filter(ListItem.household_id == hid, ListItem.is_deleted == True, ListItem.deleted_at <= purge_cutoff).count() if hid else 0
+    # Data for System Stats
+    active_lists_count = 0
+    if hid:
+        active_lists_count = HouseholdList.query.filter_by(household_id=hid, is_deleted=False).count()
 
+    # Data for Admin Actions
+    purgeable_lists_count = 0
+    purgeable_items_count = 0
+    if hid:
+        purge_cutoff = get_local_now() - timedelta(days=30)
+        purgeable_lists_count = HouseholdList.query.filter(
+            HouseholdList.household_id == hid,
+            HouseholdList.is_deleted == True,
+            HouseholdList.deleted_at <= purge_cutoff
+        ).count()
+        purgeable_items_count = ListItem.query.filter(
+            ListItem.household_id == hid,
+            ListItem.is_deleted == True,
+            ListItem.deleted_at <= purge_cutoff
+        ).count()
     health = get_health_status()
-    return render_template('dashboard.html', activity=activity, today_completions=completions,
+
+    return render_template('settings.html',
                            active_lists_count=active_lists_count,
                            purgeable_lists_count=purgeable_lists_count,
                            purgeable_items_count=purgeable_items_count,
@@ -833,26 +881,42 @@ def leaderboard():
     completed_items = ActionItem.query.filter_by(household_id=hid, status='done').all()
     users = {u.id: u.name for u in User.query.filter_by(household_id=hid).all()}
 
+    # Calculate daily points and task counts
     daily_scores = {}
+    daily_task_counts = {}
     for item in completed_items:
         if not item.owner_user_id or not item.completed_at:
             continue
         d_str = item.completed_at.date().isoformat()
         key = (item.owner_user_id, d_str)
         daily_scores[key] = daily_scores.get(key, 0) + item.complexity_fib
+        daily_task_counts[key] = daily_task_counts.get(key, 0) + 1
 
     today_str = get_local_now().date().isoformat()
+
+    # Today's points and tasks
     todays_points = [{'name': users.get(uid, 'Unknown'), 'points': pts}
                      for (uid, d_str), pts in daily_scores.items() if d_str == today_str]
     todays_points.sort(key=lambda x: x['points'], reverse=True)
 
+    todays_tasks_completed = [{'name': users.get(uid, 'Unknown'), 'count': count}
+                              for (uid, d_str), count in daily_task_counts.items() if d_str == today_str]
+    todays_tasks_completed.sort(key=lambda x: x['count'], reverse=True)
+
+    # Top 20 lists for all time (per day)
     all_scores = [{'name': users.get(uid, 'Unknown'), 'date': d_str, 'points': pts}
                   for (uid, d_str), pts in daily_scores.items()]
+    top_20_point_totals = sorted(all_scores, key=lambda x: x['points'], reverse=True)[:20]
 
-    top_scores = sorted(all_scores, key=lambda x: x['points'], reverse=True)[:10]
-    recent_scores = sorted(all_scores, key=lambda x: x['date'], reverse=True)[:10]
+    all_task_counts = [{'name': users.get(uid, 'Unknown'), 'date': d_str, 'count': count}
+                       for (uid, d_str), count in daily_task_counts.items()]
+    top_20_task_counts = sorted(all_task_counts, key=lambda x: x['count'], reverse=True)[:20]
 
-    return render_template('leaderboard.html', todays_points=todays_points, top_scores=top_scores, recent_scores=recent_scores)
+    return render_template('leaderboard.html',
+                           todays_points=todays_points,
+                           todays_tasks_completed=todays_tasks_completed,
+                           top_20_point_totals=top_20_point_totals,
+                           top_20_task_counts=top_20_task_counts)
 
 @app.route('/calendar')
 @app.route('/calendar/<int:year>/<int:month>')
@@ -1326,6 +1390,7 @@ def manage_expenses():
             return redirect(url_for('manage_expenses'))
 
         new_expense = Expense(
+            household_id=hid,
             project_id=int(request.form.get('project_id')) if request.form.get('project_id') else None,
             amount=amount,
             description=request.form.get('description'),
@@ -1340,10 +1405,9 @@ def manage_expenses():
         return redirect(url_for('manage_expenses'))
 
     page = request.args.get('page', 1, type=int)
-    all_projects = Project.query.filter_by(household_id=hid, status='active').all() if hid else []
     expenses_query = Expense.query.join(Project).filter(Project.household_id == hid).order_by(Expense.date.desc())
     expenses = expenses_query.paginate(page=page, per_page=PER_PAGE, error_out=False)
-    return render_template('expenses.html', expenses=expenses, all_projects=all_projects, today=get_local_now())
+    return render_template('expenses.html', expenses=expenses)
 
 @app.route('/expenses/<int:id>/edit', methods=['POST'])
 def edit_expense(id):
@@ -1360,6 +1424,25 @@ def edit_expense(id):
         db.session.commit()
         flash("Expense updated.", "success")
     return redirect(url_for('manage_expenses'))
+
+@app.route('/today_done')
+def today_done_view():
+    hid = session.get('household_id')
+    today = get_local_now().date()
+    today_start = datetime(today.year, today.month, today.day, 0, 0, 0)
+    tomorrow_start = today_start + timedelta(days=1)
+
+    completed_tasks_today = ActionItem.query.filter(
+        ActionItem.household_id == hid,
+        ActionItem.status == 'done',
+        ActionItem.completed_at >= today_start,
+        ActionItem.completed_at < tomorrow_start
+    ).order_by(ActionItem.completed_at.desc()).all()
+
+    total_tasks = len(completed_tasks_today)
+    total_points = sum(task.complexity_fib for task in completed_tasks_today)
+
+    return render_template('today_done.html', tasks=completed_tasks_today, total_tasks=total_tasks, total_points=total_points)
 
 @app.route('/archive')
 def archive_view():
