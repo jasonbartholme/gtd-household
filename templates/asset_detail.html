@@ -8,7 +8,8 @@
             <p class="text-muted mb-0">Category: {{ asset.category or 'N/A' }} | Location: {{ asset.context or 'N/A' }}</p>
         </div>
         <div>
-            <form action="{{ url_for('asset_toggle_status', id=asset.id) }}" method="POST">
+            <a href="{{ url_for('edit_asset', id=asset.id) }}" class="btn btn-secondary">Edit Asset</a>
+            <form action="{{ url_for('asset_toggle_status', id=asset.id) }}" method="POST" class="d-inline">
                 {% if asset.status == 'available' %}
                 <button type="submit" class="btn btn-success">Check Out</button>
                 {% else %}
@@ -22,10 +23,31 @@
     <div class="card mb-4">
         <div class="card-header">Details</div>
         <div class="card-body">
-            <p>{{ asset.notes or 'No notes for this asset.' }}</p>
-            {% if asset.purchase_url %}
-            <a href="{{ asset.purchase_url }}" target="_blank" class="btn btn-sm btn-outline-info">Purchase Link</a>
-            {% endif %}
+            <div class="row g-4">
+                <div class="col-md-4">
+                    {% if asset.image_filename %}
+                        <img src="{{ url_for('static', filename='uploads/assets/' + asset.image_filename) }}" class="img-fluid rounded" alt="{{ asset.name }}">
+                    {% else %}
+                        <div class="bg-secondary rounded d-flex align-items-center justify-content-center" style="height: 200px;">
+                            <span class="text-muted">No Image</span>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="col-md-8">
+                    <p><strong>Brand:</strong> {{ asset.brand or 'N/A' }}</p>
+                    <p><strong>Condition:</strong> {{ asset.condition or 'N/A' }}</p>
+                    <p><strong>Estimated Value:</strong> ${{ "%.2f"|format(asset.estimated_value) if asset.estimated_value else 'N/A' }}</p>
+                    {% if asset.is_for_sale %}
+                        <p><strong>Offer Price:</strong> <span class="badge bg-success fs-6">${{ "%.2f"|format(asset.offer_price) if asset.offer_price else 'Not set' }}</span></p>
+                    {% endif %}
+                    <hr>
+                    <p><strong>Notes:</strong> {{ asset.notes or 'N/A' }}</p>
+                    <div class="mt-3">
+                        {% if asset.purchase_url %}<a href="{{ asset.purchase_url }}" target="_blank" class="btn btn-sm btn-outline-info">Purchase Link</a>{% endif %}
+                        {% if asset.manual_url %}<a href="{{ asset.manual_url }}" target="_blank" class="btn btn-sm btn-outline-secondary ms-2">Support/Manual</a>{% endif %}
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

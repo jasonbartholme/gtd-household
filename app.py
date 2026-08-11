@@ -4,6 +4,7 @@ from datetime import datetime, date, timedelta
 from flask import Flask, request, redirect, url_for, session, flash, render_template, jsonify
 from flask_apscheduler import APScheduler
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.utils import secure_filename
 from zoneinfo import ZoneInfo
 
 # ==========================================
@@ -14,6 +15,8 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'lan-local-secret-key-modifqy-in-prod'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gtd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload size
 
 db = SQLAlchemy(app)
 scheduler = APScheduler()
@@ -147,6 +150,13 @@ class Asset(db.Model):
     checked_out_at = db.Column(db.DateTime, nullable=True)
     qr_code_ref = db.Column(db.String(100), unique=True, nullable=True)
     purchase_url = db.Column(db.String(500))
+    brand = db.Column(db.String(100), nullable=True)
+    estimated_value = db.Column(db.Float, nullable=True)
+    condition = db.Column(db.String(50), nullable=True) # e.g., New, Used, For Parts
+    manual_url = db.Column(db.String(500), nullable=True)
+    image_filename = db.Column(db.String(255), nullable=True)
+    offer_price = db.Column(db.Float, nullable=True)
+    is_for_sale = db.Column(db.Boolean, default=False)
 
     power_source = db.Column(db.String(50))
     battery_type = db.Column(db.String(50))
@@ -373,6 +383,7 @@ def run_migrations():
     action_item_columns = [c['name'] for c in inspector.get_columns('action_item')]
     project_columns = [c['name'] for c in inspector.get_columns('project')]
     expense_columns = [c['name'] for c in inspector.get_columns('expense')]
+    asset_columns = [c['name'] for c in inspector.get_columns('asset')]
     all_tables = inspector.get_table_names()
 
     with db.session.begin():
@@ -410,6 +421,21 @@ def run_migrations():
             print("Adding 'time_estimate' and 'energy_level' columns to 'action_item' table...")
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN time_estimate INTEGER'))
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN energy_level VARCHAR(20)'))
+
+        # Migration 6: Add new optional fields to asset
+        if 'brand' not in asset_columns:
+            print("Adding new optional fields to 'asset' table...")
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN brand VARCHAR(100)'))
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN estimated_value FLOAT'))
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN condition VARCHAR(50)'))
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN manual_url VARCHAR(500)'))
+
+        # Migration 7: Add sales and image fields to asset
+        if 'image_filename' not in asset_columns:
+            print("Adding sales and image fields to 'asset' table...")
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN image_filename VARCHAR(255)'))
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN offer_price FLOAT'))
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN is_for_sale BOOLEAN DEFAULT 0'))
 
         # Migration 6: Create the setting table if it doesn't exist
         if 'setting' not in all_tables:
@@ -1258,9 +1284,24 @@ def add_asset():
         power_source=request.form.get('power_source'),
         battery_type=request.form.get('battery_type'),
         battery_lifespan_days=int(request.form.get('battery_lifespan_days')) if request.form.get('battery_lifespan_days') else None,
+        brand=request.form.get('brand'),
+        estimated_value=float(request.form.get('estimated_value')) if request.form.get('estimated_value') else None,
+        condition=request.form.get('condition'),
+        manual_url=request.form.get('manual_url'),
         purchase_url=request.form.get('purchase_url'),
         notes=request.form.get('notes')
     )
+    # Handle file upload
+    if 'image' in request.files:
+        file = request.files['image']
+        if file and file.filename != '':
+            filename = secure_filename(file.filename)
+            upload_path = os.path.join(app.config['UPLOAD_FOLDER'], 'assets')
+            os.makedirs(upload_path, exist_ok=True)
+            file.save(os.path.join(upload_path, filename))
+            new_asset.image_filename = filename
+
+    new_asset.is_for_sale = 'is_for_sale' in request.form
     supply_ids = request.form.getlist('supplies')
     new_asset.supplies = Supply.query.filter(Supply.id.in_(supply_ids)).all()
 
@@ -1268,6 +1309,44 @@ def add_asset():
     db.session.commit()
     log_activity(session.get('user_id'), 'add_asset', f"Added asset: {new_asset.name}")
     return redirect(url_for('assets'))
+
+@app.route('/assets/<int:id>/edit', methods=['GET', 'POST'])
+def edit_asset(id):
+    asset = db.session.get(Asset, id)
+    if not asset:
+        flash("Asset not found.", "danger")
+        return redirect(url_for('assets'))
+
+    if request.method == 'POST':
+        asset.name = request.form.get('name')
+        asset.category = request.form.get('category')
+        asset.context = request.form.get('context')
+        asset.notes = request.form.get('notes')
+        asset.purchase_url = request.form.get('purchase_url')
+        asset.brand = request.form.get('brand')
+        asset.estimated_value = float(request.form.get('estimated_value')) if request.form.get('estimated_value') else None
+        asset.condition = request.form.get('condition')
+        asset.manual_url = request.form.get('manual_url')
+        asset.power_source = request.form.get('power_source')
+        asset.battery_type = request.form.get('battery_type')
+        asset.battery_lifespan_days = int(request.form.get('battery_lifespan_days')) if request.form.get('battery_lifespan_days') else None
+
+        if 'image' in request.files:
+            file = request.files['image']
+            if file and file.filename != '':
+                filename = secure_filename(file.filename)
+                upload_path = os.path.join(app.config['UPLOAD_FOLDER'], 'assets')
+                os.makedirs(upload_path, exist_ok=True)
+                file.save(os.path.join(upload_path, filename))
+                asset.image_filename = filename
+
+        asset.offer_price = float(request.form.get('offer_price')) if request.form.get('offer_price') else None
+        asset.is_for_sale = 'is_for_sale' in request.form
+        db.session.commit()
+        flash(f"Asset '{asset.name}' updated successfully.", "success")
+        return redirect(url_for('asset_detail', id=id))
+
+    return render_template('asset_edit.html', asset=asset)
 
 @app.route('/assets/<int:id>')
 def asset_detail(id):

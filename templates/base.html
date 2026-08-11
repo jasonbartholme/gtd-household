@@ -41,15 +41,44 @@
             border-color: #86b7fe;
             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
         }
+
+        /* Sidebar Styles */
+        .sidebar {
+            transition: width 0.3s ease;
+        }
+        .main-content {
+            transition: width 0.3s ease;
+        }
+
+        /* Collapsed Sidebar Styles */
+        .sidebar-collapsed .sidebar {
+            width: 80px;
+        }
+        .sidebar-collapsed .main-content {
+            width: calc(100% - 80px);
+        }
+        .sidebar-collapsed .nav-text,
+        .sidebar-collapsed .dropdown-toggle::after {
+            display: none;
+        }
+        .sidebar-collapsed .nav-link {
+            text-align: center;
+        }
+        .sidebar-collapsed .nav-link .me-2 {
+            margin-right: 0 !important;
+        }
+        .sidebar-collapsed #sidebar-toggle i {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
-<body>
+<body id="app-body">
     <div class="container-fluid">
         <div class="row">
-            <div class="col-md-2 bg-dark vh-100 p-3 d-flex flex-column">
+            <div class="col-md-2 bg-dark vh-100 p-3 d-flex flex-column sidebar">
                 {% include '_navigation.html' %}
             </div>
-            <div class="col-md-10 p-4">
+            <div class="col-md-10 p-4 main-content">
                 <div class="d-flex justify-content-end mb-3">
                     {% if current_user %}
                     <div style="width: 200px;">
@@ -224,6 +253,28 @@
                 bsAlert.close();
             }, {{ flash_dismiss_time }});
         });
+
+        // Sidebar Toggle Logic
+        const body = document.getElementById('app-body');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+
+        function setSidebarState(collapsed) {
+            if (collapsed) {
+                body.classList.add('sidebar-collapsed');
+                localStorage.setItem('sidebarState', 'collapsed');
+            } else {
+                body.classList.remove('sidebar-collapsed');
+                localStorage.setItem('sidebarState', 'expanded');
+            }
+        }
+
+        sidebarToggle.addEventListener('click', () => {
+            setSidebarState(!body.classList.contains('sidebar-collapsed'));
+        });
+
+        // On page load, apply the saved sidebar state
+        const savedState = localStorage.getItem('sidebarState');
+        setSidebarState(savedState === 'collapsed');
     </script>
 </body>
 </html>
