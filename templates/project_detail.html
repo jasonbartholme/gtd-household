@@ -12,6 +12,18 @@
         </div>
     </div>
 
+    {% if project_expense_total > 0 %}
+    <div class="alert alert-info mt-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Project Expense Total</strong>
+                <div class="text-muted small">Associated with this project</div>
+            </div>
+            <span class="badge bg-success fs-6">${{ "%.2f"|format(project_expense_total) }}</span>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card mb-4">
         <div class="card-header d-flex justify-content-between align-items-center">
             <span>Project Details</span>
@@ -44,6 +56,32 @@
         {% else %}
             <div class="list-group-item">No tasks associated with this project yet.</div>
         {% endfor %}
+    </div>
+
+    <div class="card mt-4">
+        <div class="card-header">
+            <span>Associated Expenses</span>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for expense in project_expenses %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ expense.description or 'Expense' }}</strong>
+                            <div class="text-muted small">{{ expense.date.strftime('%Y-%m-%d') if expense.date else 'No date' }}</div>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-success">${{ "%.2f"|format(expense.amount) }}</span>
+                            {% if expense.source %}
+                                <div class="text-muted small">{{ expense.source }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">No expenses associated with this project yet.</div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 

@@ -65,6 +65,7 @@ class Project(db.Model):
 
     actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
     asset = db.relationship('Asset', backref=db.backref('projects', lazy='dynamic'))
+    expenses = db.relationship('Expense', backref='project', lazy='dynamic')
 
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -158,9 +159,13 @@ class MaintenanceSchedule(db.Model):
 class Expense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
     amount = db.Column(db.Float, nullable=False)
     description = db.Column(db.String(200))
+    notes = db.Column(db.Text, nullable=True)
     date = db.Column(db.DateTime, default=get_local_now)
+    source = db.Column(db.String(100), nullable=True) # e.g., Home Depot, Amazon
+    url = db.Column(db.String(500), nullable=True) # Optional product/receipt URL
 
     is_maintenance = db.Column(db.Boolean, default=False)
     maintenance_schedule_id = db.Column(db.Integer, db.ForeignKey('maintenance_schedule.id'), nullable=True)
@@ -257,6 +262,7 @@ def inject_global_data():
         'Management': {
             'manage_projects': 'Projects',
             'manage_lists': 'Lists',
+            'manage_expenses': 'Expenses',
             'assets': 'Assets',
             'supplies': 'Supplies',
             'archive_view': 'Archive',
@@ -340,6 +346,7 @@ def run_migrations():
     inspector = inspect(db.engine)
     action_item_columns = [c['name'] for c in inspector.get_columns('action_item')]
     project_columns = [c['name'] for c in inspector.get_columns('project')]
+    expense_columns = [c['name'] for c in inspector.get_columns('expense')]
 
     with db.session.begin():
         # Migration 1: Add sort_order column to action_item if it doesn't exist
@@ -353,6 +360,24 @@ def run_migrations():
             print("Adding 'asset_id' column to 'project' table...")
             db.session.execute(text('ALTER TABLE project ADD COLUMN asset_id INTEGER REFERENCES asset(id)'))
             print("'asset_id' column added.")
+
+        # Migration 3: Add project_id to expense table
+        if 'project_id' not in expense_columns:
+            print("Adding 'project_id' column to 'expense' table...")
+            db.session.execute(text('ALTER TABLE expense ADD COLUMN project_id INTEGER REFERENCES project(id)'))
+            print("'project_id' column added.")
+
+        # Migration 4: Add source and url to expense table
+        if 'source' not in expense_columns:
+            print("Adding 'source' and 'url' columns to 'expense' table...")
+            db.session.execute(text('ALTER TABLE expense ADD COLUMN source VARCHAR(100)'))
+            db.session.execute(text('ALTER TABLE expense ADD COLUMN url VARCHAR(500)'))
+
+        # Migration 5: Add notes column to expense table
+        if 'notes' not in expense_columns:
+            print("Adding 'notes' column to 'expense' table...")
+            db.session.execute(text('ALTER TABLE expense ADD COLUMN notes TEXT'))
+            print("'notes' column added.")
 
 # ==========================================
 # 5. ROUTES
@@ -426,7 +451,19 @@ def add_project():
 @app.route('/projects/<int:id>')
 def project_detail(id):
     project = db.session.get(Project, id)
-    return render_template('project_detail.html', project=project)
+    project_expenses = []
+    project_expense_total = 0.0
+
+    if project:
+        project_expenses = project.expenses.order_by(Expense.date.desc()).all()
+        project_expense_total = sum(expense.amount for expense in project_expenses)
+
+    return render_template(
+        'project_detail.html',
+        project=project,
+        project_expenses=project_expenses,
+        project_expense_total=project_expense_total
+    )
 
 @app.route('/projects/<int:id>/reorder_tasks', methods=['POST'])
 def reorder_project_tasks(id):
@@ -1276,6 +1313,53 @@ def edit_user(id):
         log_activity(session.get('user_id'), 'edit_user', f"Updated member details for: {old_name}")
         flash(f"Updated user: {u.name}", "success")
     return redirect(url_for('manage_users'))
+
+@app.route('/expenses', methods=['GET', 'POST'])
+def manage_expenses():
+    hid = session.get('household_id')
+    if request.method == 'POST': # This handles adding a new expense
+        amount_str = request.form.get('amount')
+        try:
+            amount = float(amount_str)
+        except (ValueError, TypeError):
+            flash("Invalid amount entered.", "danger")
+            return redirect(url_for('manage_expenses'))
+
+        new_expense = Expense(
+            project_id=int(request.form.get('project_id')) if request.form.get('project_id') else None,
+            amount=amount,
+            description=request.form.get('description'),
+            notes=request.form.get('notes'),
+            source=request.form.get('source'),
+            url=request.form.get('url'),
+            date=datetime.strptime(request.form.get('date'), '%Y-%m-%d') if request.form.get('date') else get_local_now()
+        )
+        db.session.add(new_expense)
+        db.session.commit()
+        flash("Expense record added.", "success")
+        return redirect(url_for('manage_expenses'))
+
+    page = request.args.get('page', 1, type=int)
+    all_projects = Project.query.filter_by(household_id=hid, status='active').all() if hid else []
+    expenses_query = Expense.query.join(Project).filter(Project.household_id == hid).order_by(Expense.date.desc())
+    expenses = expenses_query.paginate(page=page, per_page=PER_PAGE, error_out=False)
+    return render_template('expenses.html', expenses=expenses, all_projects=all_projects, today=get_local_now())
+
+@app.route('/expenses/<int:id>/edit', methods=['POST'])
+def edit_expense(id):
+    expense = db.session.get(Expense, id)
+    # Add household check for security
+    if expense and expense.project.household_id == session.get('household_id'):
+        expense.description = request.form.get('description')
+        expense.notes = request.form.get('notes')
+        expense.amount = float(request.form.get('amount'))
+        expense.source = request.form.get('source')
+        expense.url = request.form.get('url')
+        expense.project_id = int(request.form.get('project_id')) if request.form.get('project_id') else None
+        expense.date = datetime.strptime(request.form.get('date'), '%Y-%m-%d') if request.form.get('date') else expense.date
+        db.session.commit()
+        flash("Expense updated.", "success")
+    return redirect(url_for('manage_expenses'))
 
 @app.route('/archive')
 def archive_view():
