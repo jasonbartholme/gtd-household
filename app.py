@@ -93,6 +93,11 @@ asset_supply = db.Table('asset_supply',
     db.Column('supply_id', db.Integer, db.ForeignKey('supply.id'), primary_key=True)
 )
 
+action_collaborators = db.Table('action_collaborators',
+    db.Column('action_item_id', db.Integer, db.ForeignKey('action_item.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('user.id'), primary_key=True)
+)
+
 class ActionItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
@@ -119,6 +124,7 @@ class ActionItem(db.Model):
 
     assets = db.relationship('Asset', secondary=action_asset, backref=db.backref('actions', lazy=True))
     supplies = db.relationship('Supply', secondary=action_supply, backref=db.backref('actions', lazy=True))
+    collaborators = db.relationship('User', secondary=action_collaborators, lazy='subquery', backref=db.backref('collaborations', lazy=True))
 
 class ActivityLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -676,6 +682,9 @@ def add_action():
         recur_interval=int(interval) if is_recurring else 1,
         recur_unit=request.form.get('recur_unit') if is_recurring else 'days'
     )
+    collaborator_ids = request.form.getlist('collaborators')
+    action.collaborators = User.query.filter(User.id.in_(collaborator_ids)).all()
+
     db.session.add(action)
     db.session.commit()
     flash(f"New task '{action.title}' created!", "success")
@@ -741,6 +750,9 @@ def edit_action(id):
         action.assets = Asset.query.filter(Asset.id.in_(asset_ids)).all()
         supply_ids = request.form.getlist('supplies')
         action.supplies = Supply.query.filter(Supply.id.in_(supply_ids)).all()
+
+        collaborator_ids = request.form.getlist('collaborators')
+        action.collaborators = User.query.filter(User.id.in_(collaborator_ids)).all()
 
         db.session.commit()
         log_activity(session.get('user_id'), 'edit_action', f"Updated: {action.title}")

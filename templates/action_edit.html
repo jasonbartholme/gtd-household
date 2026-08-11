@@ -1,122 +1,111 @@
 {% extends "base.html" %}
-    {% block content %}
-    <div class="mb-3"><a href="{{ url_for('kanban') }}" class="btn btn-sm btn-outline-secondary">&larr; Back to Board</a></div>
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <div class="card bg-dark border-secondary shadow-sm">
-                <div class="card-header border-secondary text-primary fw-bold">Edit {{ action.item_type|title }}</div>
-                <div class="card-body">
-                    <form action="{{ url_for('edit_action', id=action.id) }}" method="POST">
+
+{% block content %}
+<div class="container mt-4">
+    <h1 class="mb-4">Edit Task: {{ action.title }}</h1>
+
+    <div class="card">
+        <div class="card-body">
+            <form action="{{ url_for('edit_action', id=action.id) }}" method="POST">
+                <div class="row">
+                    <div class="col-md-8">
                         <div class="mb-3">
-                            <label class="small text-muted" data-bs-toggle="tooltip" title="Make sure this starts with a verb!" style="cursor: help;">Title ℹ️</label>
-                            <input type="text" name="title" class="form-control bg-dark text-light border-secondary" value="{{ action.title }}" required>
+                            <label for="title" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="title" name="title" value="{{ action.title }}" required>
                         </div>
-                        
-                        <div class="row g-2 mb-3">
-                            <div class="col-md-6">
-                                <label class="small text-muted" data-bs-toggle="tooltip" title="Assign this action to a larger multi-step outcome." style="cursor: help;">Project (Optional) ℹ️</label>
-                                <select name="project_id" class="form-select bg-dark text-light border-secondary">
-                                    <option value="">-- No Project --</option>
-                                    {% for p in all_projects %}
-                                    <option value="{{ p.id }}" {% if action.project_id == p.id %}selected{% endif %}>{{ p.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="small text-muted" data-bs-toggle="tooltip" title="Use Someday to hide this from your active board." style="cursor: help;">Board Status ℹ️</label>
-                                <select name="status" class="form-select bg-dark text-light border-secondary">
-                                    <option value="ready" {% if action.status == 'ready' %}selected{% endif %}>Ready (Active Board)</option>
-                                    <option value="in_progress" {% if action.status == 'in_progress' %}selected{% endif %}>Doing (Active Board)</option>
-                                    <option value="blocked" {% if action.status == 'blocked' %}selected{% endif %}>Blocked (Active Board)</option>
-                                    <option value="someday" {% if action.status == 'someday' %}selected{% endif %}>Someday / Maybe (Hidden)</option>
-                                    <option value="done" {% if action.status == 'done' %}selected{% endif %}>Done (Archived)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="row g-2 mb-3">
-                            <div class="col-md-3">
-                                <label class="small text-muted">Type</label>
-                                <select name="item_type" class="form-select bg-dark text-light border-secondary">
-                                    <option value="task" {% if action.item_type == 'task' %}selected{% endif %}>Task</option>
-                                    <option value="chore" {% if action.item_type == 'chore' %}selected{% endif %}>Chore</option>
-                                    <option value="errand" {% if action.item_type == 'errand' %}selected{% endif %}>Errand</option>
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="small text-muted">Chorenado</label>
-                                <select name="complexity_fib" class="form-select bg-dark text-light border-secondary">
-                                    {% for val in [1, 2, 3, 5, 8, 13] %}
-                                    <option value="{{ val }}" {% if action.complexity_fib == val %}selected{% endif %}>{{ val }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-3">
-                                <label class="small text-muted">Context</label>
-                                <input type="text" name="context" class="form-control bg-dark text-light border-secondary" value="{{ action.context or '' }}">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="small text-muted">Due Date</label>
-                                <input type="date" name="due_date" class="form-control bg-dark text-light border-secondary" 
-                                       value="{{ action.due_date.strftime('%Y-%m-%d') if action.due_date }}">
-                            </div>
-                        </div>
-
-                        <hr class="border-secondary">
-                        <h6 class="text-info mb-3 small fw-bold">Recurrence</h6>
-                        <div class="row g-2 mb-3">
-                            <div class="col-md-4">
-                                <div class="form-check mt-4">
-                                    <input class="form-check-input" type="checkbox" name="is_recurring" id="recurCheck" {% if action.is_recurring %}checked{% endif %}>
-                                    <label class="form-check-label small" for="recurCheck">Recurring Event</label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="small text-muted">Interval</label>
-                                <input type="number" name="recur_interval" class="form-control bg-dark text-light border-secondary" value="{{ action.recur_interval or 1 }}">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="small text-muted">Unit</label>
-                                <select name="recur_unit" class="form-select bg-dark text-light border-secondary">
-                                    <option value="days" {% if action.recur_unit == 'days' %}selected{% endif %}>Days</option>
-                                    <option value="weeks" {% if action.recur_unit == 'weeks' %}selected{% endif %}>Weeks</option>
-                                    <option value="months" {% if action.recur_unit == 'months' %}selected{% endif %}>Months</option>
-                                </select>
-                            </div>
-                        </div>
-
+                    </div>
+                    <div class="col-md-4">
                         <div class="mb-3">
-                            <label class="small text-muted">Description & Notes</label>
-                            <textarea name="description" class="form-control bg-dark text-light border-secondary" rows="3">{{ action.description or '' }}</textarea>
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="icebox" {% if action.status == 'icebox' %}selected{% endif %}>Icebox</option>
+                                <option value="ready" {% if action.status == 'ready' %}selected{% endif %}>Ready</option>
+                                <option value="in_progress" {% if action.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                                <option value="blocked" {% if action.status == 'blocked' %}selected{% endif %}>Blocked</option>
+                                <option value="done" {% if action.status == 'done' %}selected{% endif %}>Done</option>
+                                <option value="someday" {% if action.status == 'someday' %}selected{% endif %}>Someday/Maybe</option>
+                            </select>
                         </div>
-
-                        <hr class="border-secondary my-4">
-                        <h6 class="text-info mb-3">Associated Entities</h6>
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-6">
-                                <label class="small text-muted">Linked Assets</label>
-                                <select name="assets" class="form-select bg-dark text-light border-secondary" multiple size="5">
-                                    {% for asset in all_assets %}
-                                        <option value="{{ asset.id }}" {% if asset in action.assets %}selected{% endif %}>{{ asset.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="small text-muted">Required Supplies</label>
-                                <select name="supplies" class="form-select bg-dark text-light border-secondary" multiple size="5">
-                                    {% for supply in all_supplies %}
-                                        <option value="{{ supply.id }}" {% if supply in action.supplies %}selected{% endif %}>{{ supply.name }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="d-flex justify-content-end">
-                            <button type="submit" class="btn btn-success px-4">Save Changes</button>
-                        </div>
-                    </form>
+                    </div>
                 </div>
-            </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="4">{{ action.description or '' }}</textarea>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="project_id" class="form-label">Project</label>
+                        <select class="form-select" id="project_id" name="project_id">
+                            <option value="">None</option>
+                            {% for proj in all_projects %}
+                            <option value="{{ proj.id }}" {% if action.project_id == proj.id %}selected{% endif %}>{{ proj.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="context" class="form-label">Context</label>
+                        <input type="text" class="form-control" id="context" name="context" value="{{ action.context or '' }}">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="item_type" class="form-label">Type</label>
+                        <select class="form-select" id="item_type" name="item_type">
+                            <option value="task" {% if action.item_type == 'task' %}selected{% endif %}>Task</option>
+                            <option value="chore" {% if action.item_type == 'chore' %}selected{% endif %}>Chore</option>
+                            <option value="errand" {% if action.item_type == 'errand' %}selected{% endif %}>Errand</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="complexity_fib" class="form-label">Complexity</label>
+                        <select class="form-select" id="complexity_fib" name="complexity_fib">
+                            {% for val in [1, 2, 3, 5, 8] %}
+                            <option value="{{ val }}" {% if action.complexity_fib == val %}selected{% endif %}>{{ val }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="collaborators" class="form-label">Collaborators</label>
+                    <select name="collaborators" id="collaborators" class="form-select" multiple>
+                        {% set collaborator_ids = action.collaborators|map(attribute='id')|list %}
+                        {% for user in all_users %}
+                            {% if user.id != current_user.id %}
+                            <option value="{{ user.id }}" {% if user.id in collaborator_ids %}selected{% endif %}>{{ user.name }}</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <hr class="my-4">
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="is_recurring" name="is_recurring" {% if action.is_recurring %}checked{% endif %}>
+                    <label class="form-check-label" for="is_recurring">Is this a recurring task?</label>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4 mb-3"><input type="number" name="recur_interval" class="form-control" value="{{ action.recur_interval or 1 }}"></div>
+                    <div class="col-md-4 mb-3">
+                        <select name="recur_unit" class="form-select">
+                            <option value="days" {% if action.recur_unit == 'days' %}selected{% endif %}>Days</option>
+                            <option value="weeks" {% if action.recur_unit == 'weeks' %}selected{% endif %}>Weeks</option>
+                            <option value="months" {% if action.recur_unit == 'months' %}selected{% endif %}>Months</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4 mb-3"><input type="date" name="due_date" class="form-control" value="{{ action.due_date.strftime('%Y-%m-%d') if action.due_date }}"></div>
+                </div>
+
+                <div class="mt-4">
+                    <a href="{{ url_for('kanban') }}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
         </div>
     </div>
-    {% endblock %}
+</div>
+{% endblock %}
