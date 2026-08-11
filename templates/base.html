@@ -215,6 +215,15 @@
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
           return new bootstrap.Tooltip(tooltipTriggerEl)
         })
+
+        // Auto-dismiss flash messages after 2 seconds
+        const alerts = document.querySelectorAll('.alert-dismissible.fade.show');
+        alerts.forEach(function(alert) {
+            setTimeout(function() {
+                const bsAlert = new bootstrap.Alert(alert);
+                bsAlert.close();
+            }, {{ flash_dismiss_time }});
+        });
     </script>
 </body>
 </html>

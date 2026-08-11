@@ -61,6 +61,22 @@
                 </div>
             </div>
         </div>
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100">
+                <div class="card-header">UI Customization</div>
+                <div class="card-body">
+                    <form action="{{ url_for('settings_view') }}" method="POST">
+                        <input type="hidden" name="form_name" value="ui_settings">
+                        <div class="mb-3">
+                            <label for="flash_dismiss_time" class="form-label">Flash Message Dismiss Time (ms)</label>
+                            <input type="number" class="form-control" id="flash_dismiss_time" name="flash_dismiss_time" value="{{ flash_dismiss_time }}" placeholder="e.g., 2000">
+                            <div class="form-text">Time in milliseconds before a status message disappears.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Save UI Settings</button>
+                    </form>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

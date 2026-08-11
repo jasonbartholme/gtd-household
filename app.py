@@ -215,6 +215,10 @@ class ListItem(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
 
+class Setting(db.Model):
+    key = db.Column(db.String(50), primary_key=True)
+    value = db.Column(db.String(255), nullable=False)
+
 def log_activity(user_id, action_type, description):
     if user_id:
         db.session.add(ActivityLog(user_id=user_id, action_type=action_type, description=description))
@@ -231,6 +235,10 @@ def inject_global_data():
 
     # Data for global modals and forms
     hid = session.get('household_id')
+    # Get UI settings
+    flash_dismiss_time_setting = db.session.get(Setting, 'flash_dismiss_time')
+    flash_dismiss_time = int(flash_dismiss_time_setting.value) if flash_dismiss_time_setting else 2000
+
     all_projects = Project.query.filter_by(household_id=hid, status='active').all() if hid else []
 
     # Global unprocessed inbox count
@@ -294,7 +302,8 @@ def inject_global_data():
         today=get_local_now().date(),
         unproc_inbox=unproc_inbox,
         page_title=page_title,
-        nav_links=nav_links
+        nav_links=nav_links,
+        flash_dismiss_time=flash_dismiss_time
     )
 first_run = True
 
@@ -364,6 +373,7 @@ def run_migrations():
     action_item_columns = [c['name'] for c in inspector.get_columns('action_item')]
     project_columns = [c['name'] for c in inspector.get_columns('project')]
     expense_columns = [c['name'] for c in inspector.get_columns('expense')]
+    all_tables = inspector.get_table_names()
 
     with db.session.begin():
         # Migration 1: Add sort_order column to action_item if it doesn't exist
@@ -400,6 +410,13 @@ def run_migrations():
             print("Adding 'time_estimate' and 'energy_level' columns to 'action_item' table...")
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN time_estimate INTEGER'))
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN energy_level VARCHAR(20)'))
+
+        # Migration 6: Create the setting table if it doesn't exist
+        if 'setting' not in all_tables:
+            print("Creating 'setting' table...")
+            Setting.__table__.create(db.engine)
+            # Seed the default value
+            db.session.add(Setting(key='flash_dismiss_time', value='2000'))
 
 # ==========================================
 # 5. ROUTES
@@ -874,6 +891,17 @@ def dashboard(): # User's summary with today's actions from the log
 @app.route('/settings')
 def settings_view():
     hid = session.get('household_id')
+    
+    if request.method == 'POST':
+        form_name = request.form.get('form_name')
+        if form_name == 'ui_settings':
+            dismiss_time = request.form.get('flash_dismiss_time', '2000')
+            setting = db.session.get(Setting, 'flash_dismiss_time') or Setting(key='flash_dismiss_time')
+            setting.value = dismiss_time
+            db.session.add(setting)
+            db.session.commit()
+            flash('UI settings updated.', 'success')
+            return redirect(url_for('settings_view'))
 
     # Data for System Stats
     active_lists_count = 0
