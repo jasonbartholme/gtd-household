@@ -140,6 +140,21 @@
                         <input type="text" name="context" class="form-control" value="{{ item.context or '' }}">
                     </div>
                 </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Time Estimate (minutes)</label>
+                        <input type="number" name="time_estimate" class="form-control">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Energy Level</label>
+                        <select name="energy_level" class="form-select">
+                            <option value="">None</option>
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                        </select>
+                    </div>
+                </div>
                 <div class="modal-footer">
                     <button type="submit" name="submit_action" value="save_close" class="btn btn-secondary">Save & Close</button>
                     <button type="submit" name="submit_action" value="save_next" class="btn btn-primary">Save & Next</button>

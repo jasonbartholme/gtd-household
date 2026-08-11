@@ -136,6 +136,21 @@
                                         <input type="date" name="due_date" id="task-due-date" class="form-control">
                                     </div>
                                 </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="task-time-estimate" class="form-label">Time Estimate (minutes)</label>
+                                <input type="number" name="time_estimate" id="task-time-estimate" class="form-control">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="task-energy-level" class="form-label">Energy Level</label>
+                                <select name="energy_level" id="task-energy-level" class="form-select">
+                                    <option value="">None</option>
+                                    <option value="Low">Low</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="High">High</option>
+                                </select>
+                            </div>
+                        </div>
                         <div class="mb-3">
                             <label for="task-collaborators" class="form-label">Add Collaborators</label>
                             <select name="collaborators" id="task-collaborators" class="form-select" multiple>

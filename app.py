@@ -109,6 +109,8 @@ class ActionItem(db.Model):
     status = db.Column(db.String(20), default='icebox') # icebox, ready, in_progress, blocked, done, waiting, someday, archived
     complexity_fib = db.Column(db.Integer, default=1)
     base_points = db.Column(db.Integer, default=10)
+    time_estimate = db.Column(db.Integer, nullable=True) # In minutes
+    energy_level = db.Column(db.String(20), nullable=True) # e.g., Low, Medium, High
     owner_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
@@ -393,6 +395,12 @@ def run_migrations():
             db.session.execute(text('ALTER TABLE expense ADD COLUMN notes TEXT'))
             print("'notes' column added.")
 
+        # Migration 5: Add time_estimate and energy_level to action_item
+        if 'time_estimate' not in action_item_columns:
+            print("Adding 'time_estimate' and 'energy_level' columns to 'action_item' table...")
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN time_estimate INTEGER'))
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN energy_level VARCHAR(20)'))
+
 # ==========================================
 # 5. ROUTES
 # ==========================================
@@ -613,6 +621,8 @@ def process_inbox(item_id):
         description=request.form.get('description'),
         sort_order=sort_order,
         item_type=request.form.get('item_type'),
+        time_estimate=int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None,
+        energy_level=request.form.get('energy_level'),
         complexity_fib=int(request.form.get('complexity_fib')),
         context=request.form.get('context'),
         project_id=int(project_id) if project_id else None,
@@ -673,6 +683,8 @@ def add_action():
         sort_order=sort_order,
         item_type=request.form.get('item_type', 'task'),
         complexity_fib=int(request.form.get('complexity_fib', 1)),
+        time_estimate=int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None,
+        energy_level=request.form.get('energy_level'),
         context=request.form.get('context'),
         project_id=project_id,
         status=request.form.get('status', 'icebox'),
@@ -730,6 +742,8 @@ def edit_action(id):
         action.title = request.form.get('title')
         action.item_type = request.form.get('item_type')
         action.complexity_fib = int(request.form.get('complexity_fib'))
+        action.time_estimate = int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None
+        action.energy_level = request.form.get('energy_level')
         action.context = request.form.get('context')
         action.description = request.form.get('description')
         action.status = request.form.get('status')
@@ -790,6 +804,8 @@ def update_status(item_id):
                     description=action.description,
                     item_type=action.item_type,
                     complexity_fib=action.complexity_fib,
+                    time_estimate=action.time_estimate,
+                    energy_level=action.energy_level,
                     context=action.context,
                     project_id=action.project_id,
                     is_recurring=True,

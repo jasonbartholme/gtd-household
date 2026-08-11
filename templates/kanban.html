@@ -43,7 +43,11 @@
                             </div>
                         </div>
                         <div class="mt-2 card-details">
-                            <span class="badge bg-secondary">{{ item.complexity_fib }} pts</span>
+                            <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Complexity Points"><i class="bi bi-bar-chart-steps"></i> {{ item.complexity_fib }}</span>
+                            {% if item.time_estimate %}
+                            <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Time Estimate"><i class="bi bi-clock"></i> {{ item.time_estimate }}m</span>
+                            {% endif %}
+                            {% if item.energy_level %}<span class="badge bg-secondary" data-bs-toggle="tooltip" title="Energy Level"><i class="bi bi-battery-half"></i> {{ item.energy_level }}</span>{% endif %}
                             <a href="{{ url_for('edit_action', id=item.id) }}" class="btn btn-sm btn-outline-secondary float-end py-0 px-1">Edit</a>
                         </div>
                     </div>
