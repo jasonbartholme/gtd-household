@@ -12,6 +12,8 @@ Key Features
 *   **Clarify Workflow:** A dedicated modal to process inbox items. Transform raw thoughts into actionable tasks, assign them to Projects, give them Contexts (e.g., `@Garage`), or defer them to the `Someday/Maybe` list.
 *   **"Save and Next" Button:** A streamlined workflow to rapidly process your entire inbox without leaving the page.
 
+<img width="1412" height="839" alt="board-view" src="https://github.com/user-attachments/assets/a911a7db-791e-485d-92d6-47be0ddc74ce" />
+
 ### Workflow & Kanban Board
 
 *   **The Icebox:** A dedicated page for tasks that have been reviewed but are not yet ready for implementation. This keeps the main board clean and focused.
@@ -21,6 +23,8 @@ Key Features
 *   **Collaborator Assignment:** Assign multiple users to a task, with their avatars displayed on the Kanban cards for quick visibility.
 *   **Recurring Tasks:** Actions can be set to recur automatically. Completing a recurring task automatically calculates the next due date and respawns it in the Icebox.
 *   **Contexts & Due Dates:** Assign contexts and due dates to visually track where and when things need to happen.
+
+<img width="1419" height="856" alt="active-projecs-view" src="https://github.com/user-attachments/assets/ec85d8cf-4d78-4c55-a7ce-4e7898bd4a46" />
 
 ### Planning & Strategy
 
@@ -32,6 +36,8 @@ Key Features
 *   **Dynamic Calendar:** A visual monthly calendar grid highlighting days with due actions, now offering both grid and list views.
 *   **Household Lists:** Create custom, taggable lists (e.g., Groceries, Packing, Menards Run) tied to specific geographical contexts. Features drag-and-drop reordering, quick-add, and soft-deletion.
 
+<img width="1430" height="849" alt="project-detail-view" src="https://github.com/user-attachments/assets/8262279b-1b5f-41a4-922b-9f0a4f732619" />
+
 ### Asset & Supply Tracking
 
 *   **Asset Management:** Track valuable household items (vehicles, appliances, electronics) including location, purchase URLs, and check-in/check-out status. Asset pages now display related active and completed projects.
@@ -42,7 +48,9 @@ Key Features
 *   **Smart Restocking:** When a supply drops below its threshold, the system can automatically add it to a shopping list or generate a new Errand.
 *   **Expense Management:** Track project-specific expenses with fields for amount, description, notes, source, and URL. Expenses are linked to projects and displayed on project detail pages. A dedicated "Expenses" page allows for managing all expense records with pagination.
 
-### Metrics & Gamification
+<img width="1417" height="843" alt="archive-view" src="https://github.com/user-attachments/assets/881dc812-92fc-4355-ba33-7135e8e8ffd3" />
+
+*   ## Metrics & Gamification
 
 *   **Complexity Points:** Tasks are assigned complexity points using the Fibonacci sequence (1, 2, 3, 5, 8).
 *   **Leaderboard:** Compete with household members! The enhanced leaderboard tracks today's top point earners, today's top task finishers, and the top 20 daily point totals and task counts of all time.
