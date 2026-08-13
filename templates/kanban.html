@@ -29,7 +29,7 @@
                     <div class="list-group-item kanban-card" data-id="{{ item.id }}">
                         <div class="d-flex w-100 justify-content-between">
                             <h6 class="mb-1">{{ item.title }}</h6>
-                            <small><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
+                            <i class="bi bi-grip-vertical fs-4" style="cursor: grab;"></i>
                         </div>
                         <p class="mb-1 small text-muted card-details">{{ item.description|truncate(100) if item.description else 'No description' }}</p>
                         {% if item.project %}
@@ -40,15 +40,25 @@
                         <div class="mt-2 d-flex justify-content-between align-items-center">
                             <div class="card-details">
                                 {% for user in item.collaborators %}<span class="badge rounded-pill bg-dark text-light" data-bs-toggle="tooltip" title="{{ user.name }}">{{ user.name[0] }}</span>{% endfor %}
+                                <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Complexity Points"><i class="bi bi-bar-chart-steps"></i> {{ item.complexity_fib }}</span>
+                                {% if item.time_estimate %}
+                                <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Time Estimate"><i class="bi bi-clock"></i> {{ item.time_estimate }}m</span>
+                                {% endif %}
+                                {% if item.energy_level %}<span class="badge bg-secondary" data-bs-toggle="tooltip" title="Energy Level"><i class="bi bi-battery-half"></i> {{ item.energy_level }}</span>{% endif %}
                             </div>
-                        </div>
-                        <div class="mt-2 card-details">
-                            <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Complexity Points"><i class="bi bi-bar-chart-steps"></i> {{ item.complexity_fib }}</span>
-                            {% if item.time_estimate %}
-                            <span class="badge bg-secondary" data-bs-toggle="tooltip" title="Time Estimate"><i class="bi bi-clock"></i> {{ item.time_estimate }}m</span>
-                            {% endif %}
-                            {% if item.energy_level %}<span class="badge bg-secondary" data-bs-toggle="tooltip" title="Energy Level"><i class="bi bi-battery-half"></i> {{ item.energy_level }}</span>{% endif %}
-                            <a href="{{ url_for('edit_action', id=item.id) }}" class="btn btn-sm btn-outline-secondary float-end py-0 px-1">Edit</a>
+                            <div class="dropdown card-details">
+                                <button class="btn btn-sm btn-outline-secondary py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-dark">
+                                    <li><a class="dropdown-item" href="{{ url_for('edit_action', id=item.id) }}"><i class="bi bi-pencil-square me-2"></i>Edit</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button class="dropdown-item text-danger" onclick="document.getElementById('delete-form-{{ item.id }}').submit();"><i class="bi bi-trash me-2"></i>Delete</button>
+                                        <form id="delete-form-{{ item.id }}" action="{{ url_for('delete_action', id=item.id) }}" method="POST" class="d-none" onsubmit="return confirm('Are you sure?');"></form>
+                                    </li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                     {% endfor %}

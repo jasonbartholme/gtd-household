@@ -65,6 +65,8 @@ class Project(db.Model):
     status = db.Column(db.String(50), default='active') # active, completed
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
+    is_deleted = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
     asset = db.relationship('Asset', backref=db.backref('projects', lazy='dynamic'))
@@ -123,6 +125,8 @@ class ActionItem(db.Model):
     is_recurring = db.Column(db.Boolean, default=False)
     recur_interval = db.Column(db.Integer, default=1)
     recur_unit = db.Column(db.String(20)) # days, weeks, months
+    is_deleted = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     lat = db.Column(db.Float, nullable=True)
     lng = db.Column(db.Float, nullable=True)
@@ -157,6 +161,8 @@ class Asset(db.Model):
     image_filename = db.Column(db.String(255), nullable=True)
     offer_price = db.Column(db.Float, nullable=True)
     is_for_sale = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     power_source = db.Column(db.String(50))
     battery_type = db.Column(db.String(50))
@@ -187,6 +193,8 @@ class Expense(db.Model):
 
     is_maintenance = db.Column(db.Boolean, default=False)
     maintenance_schedule_id = db.Column(db.Integer, db.ForeignKey('maintenance_schedule.id'), nullable=True)
+    is_deleted = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
 class Supply(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -198,6 +206,8 @@ class Supply(db.Model):
     context = db.Column(db.String(100))
     purchase_url = db.Column(db.String(500))
     store_name = db.Column(db.String(100))
+    is_deleted = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
 class HouseholdList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -249,7 +259,7 @@ def inject_global_data():
     flash_dismiss_time_setting = db.session.get(Setting, 'flash_dismiss_time')
     flash_dismiss_time = int(flash_dismiss_time_setting.value) if flash_dismiss_time_setting else 2000
 
-    all_projects = Project.query.filter_by(household_id=hid, status='active').all() if hid else []
+    all_projects = Project.query.filter_by(household_id=hid, status='active', is_deleted=False).all() if hid else []
 
     # Global unprocessed inbox count
     unproc_inbox = InboxItem.query.filter_by(household_id=hid, processed_at=None).count() if hid else 0
@@ -290,6 +300,7 @@ def inject_global_data():
             'today_done_view': 'Today\'s Done',
             'leaderboard': 'Leaderboard',
             'calendar_view': 'Calendar',
+            'expense_report': 'Expense Report'
         },
         'Management': {
             'manage_projects': 'Projects',
@@ -384,10 +395,15 @@ def run_migrations():
     project_columns = [c['name'] for c in inspector.get_columns('project')]
     expense_columns = [c['name'] for c in inspector.get_columns('expense')]
     asset_columns = [c['name'] for c in inspector.get_columns('asset')]
+    supply_columns = [c['name'] for c in inspector.get_columns('supply')]
+
     all_tables = inspector.get_table_names()
 
     with db.session.begin():
-        # Migration 1: Add sort_order column to action_item if it doesn't exist
+        if 'is_deleted' not in action_item_columns:
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN deleted_at DATETIME'))
+
         if 'sort_order' not in action_item_columns:
             print("Adding 'sort_order' column to 'action_item' table...")
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN sort_order INTEGER DEFAULT 0'))
@@ -398,12 +414,18 @@ def run_migrations():
             print("Adding 'asset_id' column to 'project' table...")
             db.session.execute(text('ALTER TABLE project ADD COLUMN asset_id INTEGER REFERENCES asset(id)'))
             print("'asset_id' column added.")
+        
+        if 'is_deleted' not in project_columns:
+            db.session.execute(text('ALTER TABLE project ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+            db.session.execute(text('ALTER TABLE project ADD COLUMN deleted_at DATETIME'))
 
         # Migration 3: Add project_id to expense table
         if 'project_id' not in expense_columns:
             print("Adding 'project_id' column to 'expense' table...")
             db.session.execute(text('ALTER TABLE expense ADD COLUMN project_id INTEGER REFERENCES project(id)'))
             print("'project_id' column added.")
+            db.session.execute(text('ALTER TABLE expense ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+            db.session.execute(text('ALTER TABLE expense ADD COLUMN deleted_at DATETIME'))
 
         # Migration 4: Add source and url to expense table
         if 'source' not in expense_columns:
@@ -436,6 +458,16 @@ def run_migrations():
             db.session.execute(text('ALTER TABLE asset ADD COLUMN image_filename VARCHAR(255)'))
             db.session.execute(text('ALTER TABLE asset ADD COLUMN offer_price FLOAT'))
             db.session.execute(text('ALTER TABLE asset ADD COLUMN is_for_sale BOOLEAN DEFAULT 0'))
+
+        if 'is_deleted' not in asset_columns:
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+            db.session.execute(text('ALTER TABLE asset ADD COLUMN deleted_at DATETIME'))
+
+        # Migration 8: Add soft delete to supply
+        if 'is_deleted' not in supply_columns:
+            print("Adding soft delete fields to 'supply' table...")
+            db.session.execute(text('ALTER TABLE supply ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+            db.session.execute(text('ALTER TABLE supply ADD COLUMN deleted_at DATETIME'))
 
         # Migration 6: Create the setting table if it doesn't exist
         if 'setting' not in all_tables:
@@ -490,14 +522,15 @@ def kanban():
     hid = session.get('household_id')
     items = ActionItem.query.filter(
         ActionItem.household_id==hid,
-        ActionItem.status.notin_(['someday', 'archived', 'icebox'])
+        ActionItem.status.notin_(['someday', 'archived', 'icebox']),
+        ActionItem.is_deleted == False
     ).order_by(ActionItem.created_at.desc()).all()
     return render_template("kanban.html", items=items)
 
 @app.route('/projects')
 def manage_projects():
     hid = session.get('household_id')
-    projects = Project.query.filter_by(household_id=hid, status='active').order_by(Project.created_at.desc()).all()
+    projects = Project.query.filter_by(household_id=hid, status='active', is_deleted=False).order_by(Project.created_at.desc()).all()
 
     projects_data = []
     for proj in projects:
@@ -599,7 +632,7 @@ def toggle_project_status(id):
 @app.route('/someday')
 def someday_view():
     hid = session.get('household_id')
-    items = ActionItem.query.filter_by(household_id=hid, status='someday').order_by(ActionItem.created_at.desc()).all()
+    items = ActionItem.query.filter_by(household_id=hid, status='someday', is_deleted=False).order_by(ActionItem.created_at.desc()).all()
     return render_template('someday.html', items=items)
 
 @app.route('/someday/<int:id>/activate', methods=['POST'])
@@ -821,6 +854,16 @@ def edit_action(id):
     all_supplies = Supply.query.filter_by(household_id=hid).all()
     return render_template('action_edit.html', action=action, all_assets=all_assets, all_supplies=all_supplies)
 
+@app.route('/action/<int:id>/delete', methods=['POST'])
+def delete_action(id):
+    action = db.session.get(ActionItem, id)
+    if action and action.household_id == session.get('household_id'):
+        action.is_deleted = True
+        action.deleted_at = get_local_now()
+        db.session.commit()
+        flash(f"Task '{action.title}' deleted.", "success")
+    return redirect(request.referrer or url_for('kanban'))
+
 @app.route('/api/update_status/<int:item_id>', methods=['POST'])
 def update_status(item_id):
     action = db.session.get(ActionItem, item_id)
@@ -884,7 +927,7 @@ def icebox_view():
         return redirect(url_for('icebox_view'))
 
     # GET request
-    icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox').order_by(ActionItem.project_id, ActionItem.sort_order).all()
+    icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox', is_deleted=False).order_by(ActionItem.project_id, ActionItem.sort_order).all()
 
     # Group by project
     from itertools import groupby
@@ -960,15 +1003,14 @@ def settings_view():
 @app.route('/leaderboard')
 def leaderboard():
     hid = session.get('household_id')
-    completed_items = ActionItem.query.filter_by(household_id=hid, status='done').all()
+    # Query all completed items, including those already archived, based on completion date.
+    completed_items = ActionItem.query.filter(ActionItem.household_id == hid, ActionItem.completed_at != None).all()
     users = {u.id: u.name for u in User.query.filter_by(household_id=hid).all()}
 
     # Calculate daily points and task counts
     daily_scores = {}
     daily_task_counts = {}
     for item in completed_items:
-        if not item.owner_user_id or not item.completed_at:
-            continue
         d_str = item.completed_at.date().isoformat()
         key = (item.owner_user_id, d_str)
         daily_scores[key] = daily_scores.get(key, 0) + item.complexity_fib
@@ -1270,7 +1312,7 @@ def reorder_unassigned():
 @app.route('/assets')
 def assets():
     hid = session.get('household_id')
-    all_assets = Asset.query.filter_by(household_id=hid).all()
+    all_assets = Asset.query.filter_by(household_id=hid, is_deleted=False).all()
     all_supplies = Supply.query.filter_by(household_id=hid).all()
     return render_template('assets.html', assets=all_assets, all_supplies=all_supplies)
 
@@ -1347,6 +1389,16 @@ def edit_asset(id):
         return redirect(url_for('asset_detail', id=id))
 
     return render_template('asset_edit.html', asset=asset)
+
+@app.route('/assets/<int:id>/delete', methods=['POST'])
+def delete_asset(id):
+    asset = db.session.get(Asset, id)
+    if asset and asset.household_id == session.get('household_id'):
+        asset.is_deleted = True
+        asset.deleted_at = get_local_now()
+        db.session.commit()
+        flash(f"Asset '{asset.name}' deleted.", "success")
+    return redirect(url_for('assets'))
 
 @app.route('/assets/<int:id>')
 def asset_detail(id):
@@ -1425,7 +1477,7 @@ def add_asset_expense(id):
 @app.route('/supplies')
 def supplies():
     hid = session.get('household_id')
-    items = Supply.query.filter_by(household_id=hid).all()
+    items = Supply.query.filter_by(household_id=hid, is_deleted=False).all()
     return render_template('supplies.html', supplies=items)
 
 @app.route('/supplies/add', methods=['POST'])
@@ -1458,6 +1510,16 @@ def add_supply():
 
     db.session.commit()
     log_activity(session.get('user_id'), 'add_supply', f"Added supply: {new_supply.name}")
+    return redirect(url_for('supplies'))
+
+@app.route('/supplies/<int:id>/delete', methods=['POST'])
+def delete_supply(id):
+    supply = db.session.get(Supply, id)
+    if supply and supply.household_id == session.get('household_id'):
+        supply.is_deleted = True
+        supply.deleted_at = get_local_now()
+        db.session.commit()
+        flash(f"Supply '{supply.name}' deleted.", "success")
     return redirect(url_for('supplies'))
 
 @app.route('/supplies/<int:id>/use', methods=['POST'])
@@ -1540,9 +1602,58 @@ def manage_expenses():
         return redirect(url_for('manage_expenses'))
 
     page = request.args.get('page', 1, type=int)
-    expenses_query = Expense.query.join(Project).filter(Project.household_id == hid).order_by(Expense.date.desc())
+    expenses_query = Expense.query.join(Project).filter(Project.household_id == hid, Expense.is_deleted==False).order_by(Expense.date.desc())
     expenses = expenses_query.paginate(page=page, per_page=PER_PAGE, error_out=False)
     return render_template('expenses.html', expenses=expenses)
+
+@app.route('/expenses/<int:id>/delete', methods=['POST'])
+def delete_expense(id):
+    expense = db.session.get(Expense, id)
+    # This check is a bit indirect, needs improvement if expenses can exist without projects
+    if expense and expense.project and expense.project.household_id == session.get('household_id'):
+        expense.is_deleted = True
+        expense.deleted_at = get_local_now()
+        db.session.commit()
+        flash("Expense record deleted.", "success")
+    return redirect(url_for('manage_expenses'))
+
+@app.route('/reports/expenses')
+def expense_report():
+    hid = session.get('household_id')
+    start_date_str = request.args.get('start_date')
+    end_date_str = request.args.get('end_date')
+
+    # --- Chart Data ---
+    monthly_expenses = db.session.query(
+        db.func.strftime('%Y-%m', Expense.date).label('month'),
+        db.func.sum(Expense.amount).label('total_amount')
+    ).outerjoin(Project, Project.id == Expense.project_id)\
+     .filter(Project.household_id == hid, Expense.is_deleted == False)\
+     .group_by(db.func.strftime('%Y-%m', Expense.date)).order_by(db.func.strftime('%Y-%m', Expense.date)).all()
+    labels = [row.month for row in monthly_expenses]
+    data = [row.total_amount for row in monthly_expenses]
+
+    # --- Recent Expenses List ---
+    recent_expenses_query = Expense.query.join(Project).filter(Project.household_id == hid, Expense.is_deleted == False)
+
+    if start_date_str:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        recent_expenses_query = recent_expenses_query.filter(Expense.date >= start_date)
+    if end_date_str:
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
+        recent_expenses_query = recent_expenses_query.filter(Expense.date <= end_date)
+
+    recent_expenses = recent_expenses_query.order_by(Expense.date.desc()).limit(20).all()
+
+    return render_template(
+        'expense_report.html',
+        labels=labels,
+        data=data,
+        expenses=recent_expenses,
+        start_date=start_date_str,
+        end_date=end_date_str
+    )
+
 
 @app.route('/expenses/<int:id>/edit', methods=['POST'])
 def edit_expense(id):
@@ -1569,7 +1680,7 @@ def today_done_view():
 
     completed_tasks_today = ActionItem.query.filter(
         ActionItem.household_id == hid,
-        ActionItem.status == 'done',
+        ActionItem.status.in_(['done', 'archived']),
         ActionItem.completed_at >= today_start,
         ActionItem.completed_at < tomorrow_start
     ).order_by(ActionItem.completed_at.desc()).all()

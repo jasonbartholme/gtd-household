@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Expenses Over Time</h1>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <canvas id="expenseChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Expense List Section -->
+    <div class="card mt-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Recent Expenses</h5>
+            <form class="d-flex align-items-center" method="GET" action="{{ url_for('expense_report') }}">
+                <input type="date" name="start_date" class="form-control form-control-sm me-2" value="{{ start_date or '' }}">
+                <span class="me-2">to</span>
+                <input type="date" name="end_date" class="form-control form-control-sm me-2" value="{{ end_date or '' }}">
+                <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                <a href="{{ url_for('expense_report') }}" class="btn btn-sm btn-secondary ms-2">Clear</a>
+            </form>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for expense in expenses %}
+            <div class="list-group-item">
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <strong class="d-block">{{ expense.description or 'Expense' }}</strong>
+                        <small class="text-muted">{{ expense.date.strftime('%Y-%m-%d') }}</small>
+                    </div>
+                    <div class="col-md-4">
+                        {% if expense.project %}
+                        <a href="{{ url_for('project_detail', id=expense.project.id) }}">{{ expense.project.name }}</a>
+                        {% else %}
+                        <span class="text-muted">No Project</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-2">
+                        <span class="badge bg-success fs-6">${{ "%.2f"|format(expense.amount) }}</span>
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <a href="{{ url_for('manage_expenses') }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <form action="{{ url_for('delete_expense', id=expense.id) }}" method="POST" class="d-inline ms-1" onsubmit="return confirm('Are you sure?');">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const ctx = document.getElementById('expenseChart').getContext('2d');
+    const expenseChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: {{ labels|tojson }},
+            datasets: [{
+                label: 'Total Expenses per Month',
+                data: {{ data|tojson }},
+                fill: true,
+                borderColor: '#0dcaf0', // A bright cyan for the line
+                backgroundColor: 'rgba(13, 202, 240, 0.2)', // A semi-transparent fill
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    ticks: {
+                        color: '#f8f9fa' // Light color for Y-axis labels
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)' // Lighter grid lines
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#f8f9fa' // Light color for X-axis labels
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#f8f9fa' // Light color for legend text
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %}
