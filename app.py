@@ -424,6 +424,8 @@ def run_migrations():
             print("Adding 'project_id' column to 'expense' table...")
             db.session.execute(text('ALTER TABLE expense ADD COLUMN project_id INTEGER REFERENCES project(id)'))
             print("'project_id' column added.")
+
+        if 'is_deleted' not in expense_columns:
             db.session.execute(text('ALTER TABLE expense ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
             db.session.execute(text('ALTER TABLE expense ADD COLUMN deleted_at DATETIME'))
 
@@ -614,6 +616,16 @@ def edit_project(id):
     hid = session.get('household_id')
     all_assets = Asset.query.filter_by(household_id=hid).order_by(Asset.name).all()
     return render_template('project_edit.html', project=project, all_assets=all_assets)
+
+@app.route('/projects/<int:id>/delete', methods=['POST'])
+def delete_project(id):
+    project = db.session.get(Project, id)
+    if project and project.household_id == session.get('household_id'):
+        project.is_deleted = True
+        project.deleted_at = get_local_now()
+        db.session.commit()
+        flash(f"Project '{project.name}' deleted.", "success")
+    return redirect(url_for('manage_projects'))
 
 @app.route('/projects/<int:id>/toggle', methods=['POST'])
 def toggle_project_status(id):
