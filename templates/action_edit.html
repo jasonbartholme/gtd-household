@@ -6,7 +6,7 @@
 
     <div class="card">
         <div class="card-body">
-            <form action="{{ url_for('edit_action', id=action.id) }}" method="POST">
+            <form action="{{ url_for('edit_action', id=action.id) }}" method="POST" enctype="multipart/form-data">
                 <div class="row">
                     <div class="col-md-8">
                         <div class="mb-3">
@@ -32,6 +32,12 @@
                 <div class="mb-3">
                     <label for="description" class="form-label">Description</label>
                     <textarea class="form-control" id="description" name="description" rows="4">{{ action.description or '' }}</textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label for="image" class="form-label">Upload Image</label>
+                    <input type="file" class="form-control" id="image" name="image" accept="image/*">
+                    <input type="text" class="form-control mt-2" id="image_description" name="image_description" placeholder="Image description (required if uploading)" required>
                 </div>
 
                 <div class="row">
@@ -97,6 +103,32 @@
                     </select>
                 </div>
 
+                {% if action.images %}
+                <div class="mb-3">
+                    <h6>Images</h6>
+                    <div class="d-flex flex-wrap">
+                        {% for img in action.images %}
+                        <div class="me-2 mb-2">
+                            <a href="{{ url_for('static', filename='uploads/' ~ img.filename) }}" target="_blank">
+                                <img src="{{ url_for('static', filename='uploads/thumbs/' ~ img.filename) }}" alt="{{ img.caption or action.title }}" style="max-width:120px;max-height:120px;object-fit:cover;border:1px solid #ddd;padding:2px;">
+                            </a>
+                            {% if img.caption %}<div class="small text-muted">{{ img.caption }}</div>{% endif %}
+
+                            <div class="d-flex gap-1 mt-1">
+                                <form action="{{ url_for('delete_image', id=img.id) }}" method="POST" class="m-0 confirm-delete">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                                <button type="button" class="btn btn-sm btn-outline-secondary edit-image-btn" 
+                                        data-id="{{ img.id }}" data-caption="{{ img.caption|e }}" data-project-id="{{ img.project_id or '' }}" data-action-id="{{ img.action_item_id or '' }}">
+                                    Edit
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
                 <hr class="my-4">
 
                 <div class="form-check mb-3">
@@ -124,4 +156,70 @@
         </div>
     </div>
 </div>
+
+<!-- Image Edit Modal -->
+<div class="modal fade" id="imageEditModal" tabindex="-1" aria-labelledby="imageEditModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="image-edit-form" method="POST">
+        <div class="modal-header">
+          <h5 class="modal-title" id="imageEditModalLabel">Edit Image</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label for="modal-caption" class="form-label">Description / Caption</label>
+            <input type="text" class="form-control" id="modal-caption" name="caption">
+          </div>
+          <div class="mb-3">
+            <label for="modal-project" class="form-label">Assign to Project</label>
+            <select id="modal-project" name="project_id" class="form-select">
+              <option value="">(None)</option>
+              {% for p in all_projects %}
+              <option value="{{ p.id }}">{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label for="modal-action" class="form-label">Assign to Task</label>
+            <select id="modal-action" name="action_id" class="form-select">
+              <option value="">(None)</option>
+              {% for a in all_actions %}
+              <option value="{{ a.id }}">{{ a.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var imageEditModalEl = document.getElementById('imageEditModal');
+  if (!imageEditModalEl) return;
+  var imageEditModal = new bootstrap.Modal(imageEditModalEl);
+  document.querySelectorAll('.edit-image-btn').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      var id = this.getAttribute('data-id');
+      var caption = this.getAttribute('data-caption') || '';
+      var projectId = this.getAttribute('data-project-id') || '';
+      var actionId = this.getAttribute('data-action-id') || '';
+
+      document.getElementById('modal-caption').value = caption;
+      document.getElementById('modal-project').value = projectId;
+      document.getElementById('modal-action').value = actionId;
+      var form = document.getElementById('image-edit-form');
+      form.action = '/images/' + id + '/edit';
+      imageEditModal.show();
+    });
+  });
+});
+</script>
+
 {% endblock %}

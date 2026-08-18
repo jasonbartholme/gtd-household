@@ -49,6 +49,19 @@
         </div>
         <div class="col-lg-4 col-md-6">
             <div class="card h-100">
+                <div class="card-header">Image Stats</div>
+                <div class="card-body">
+                    <p class="d-flex justify-content-between"><span>Total Images:</span> <strong>{{ total_images }}</strong></p>
+                    <p class="d-flex justify-content-between"><span>Active Images:</span> <strong>{{ active_images }}</strong></p>
+                    <p class="d-flex justify-content-between mb-0"><span>Total Storage:</span> <strong>{{ total_storage }}</strong></p>
+                    <hr>
+                    <p class="text-muted small mb-0">Images are stored in static/uploads; thumbnails stored in static/uploads/thumbs.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 col-md-6">
+            <div class="card h-100">
                 <div class="card-header">Future Settings</div>
                 <div class="card-body">
                     <p class="text-muted small">This area can be expanded with more application-wide settings.</p>

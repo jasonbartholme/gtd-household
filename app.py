@@ -5,6 +5,9 @@ from flask import Flask, request, redirect, url_for, session, flash, render_temp
 from flask_apscheduler import APScheduler
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
+from uuid import uuid4
+import re
+from PIL import Image
 from zoneinfo import ZoneInfo
 
 # ==========================================
@@ -71,6 +74,7 @@ class Project(db.Model):
     actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
     asset = db.relationship('Asset', backref=db.backref('projects', lazy='dynamic'))
     expenses = db.relationship('Expense', backref='project', lazy='dynamic')
+    images = db.relationship('ImageAttachment', backref='project', lazy=True)
 
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -134,6 +138,7 @@ class ActionItem(db.Model):
     assets = db.relationship('Asset', secondary=action_asset, backref=db.backref('actions', lazy=True))
     supplies = db.relationship('Supply', secondary=action_supply, backref=db.backref('actions', lazy=True))
     collaborators = db.relationship('User', secondary=action_collaborators, lazy='subquery', backref=db.backref('collaborations', lazy=True))
+    images = db.relationship('ImageAttachment', backref='action_item', lazy=True)
 
 class ActivityLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -209,6 +214,16 @@ class Supply(db.Model):
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
 
+class ImageAttachment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
+    filename = db.Column(db.String(255), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    action_item_id = db.Column(db.Integer, db.ForeignKey('action_item.id'), nullable=True)
+    caption = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+
+
 class HouseholdList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
@@ -238,6 +253,14 @@ class ListItem(db.Model):
 class Setting(db.Model):
     key = db.Column(db.String(50), primary_key=True)
     value = db.Column(db.String(255), nullable=False)
+
+def slugify(text):
+    # Simple slugify suitable for filenames
+    text = (text or '').lower()
+    text = re.sub(r'[^a-z0-9]+', '-', text)
+    text = text.strip('-')
+    return text or 'unassigned'
+
 
 def log_activity(user_id, action_type, description):
     if user_id:
@@ -580,11 +603,17 @@ def project_detail(id):
         completed_actions = sum(1 for action in project.actions if action.status in ['done', 'archived'])
         percentage_completed = (completed_actions / total_actions * 100) if total_actions > 0 else 0
 
+    hid = session.get('household_id')
+    all_projects = Project.query.filter_by(household_id=hid, is_deleted=False).order_by(Project.name).all() if hid else []
+    all_actions = ActionItem.query.filter_by(household_id=hid, is_deleted=False).order_by(ActionItem.title).all() if hid else []
+
     return render_template('project_detail.html',
                            project=project,
                            project_expenses=project_expenses,
                            project_expense_total=project_expense_total,
-                           percentage_completed=round(percentage_completed))
+                           percentage_completed=round(percentage_completed),
+                           all_projects=all_projects,
+                           all_actions=all_actions)
 @app.route('/projects/<int:id>/reorder_tasks', methods=['POST'])
 def reorder_project_tasks(id):
     project = db.session.get(Project, id)
@@ -607,8 +636,44 @@ def edit_project(id):
     if request.method == 'POST':
         project.name = request.form.get('name')
         project.description = request.form.get('description')
-        db.session.commit()
         project.asset_id = int(request.form.get('asset_id')) if request.form.get('asset_id') else None
+
+        # Handle uploaded image (optional). Require description if uploading an image.
+        file = request.files.get('image')
+        img_desc = request.form.get('image_description')
+        if file and file.filename:
+            if not img_desc or not img_desc.strip():
+                flash('Image description is required when uploading an image.', 'danger')
+                return redirect(request.referrer or url_for('edit_project', id=project.id))
+
+            filename = secure_filename(file.filename)
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+            if ext in allowed:
+                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+                # Build slug-based name using project name or 'unassigned'
+                base_slug = slugify(project.name)
+                unique_name = f"{base_slug}_{uuid4().hex}.{ext}"
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
+                file.save(filepath)
+
+                # Generate thumbnail
+                try:
+                    thumb_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'thumbs')
+                    os.makedirs(thumb_dir, exist_ok=True)
+                    thumb_path = os.path.join(thumb_dir, unique_name)
+                    with Image.open(filepath) as im:
+                        im.convert('RGB')
+                        im.thumbnail((400, 400))
+                        im.save(thumb_path, format='JPEG', quality=85)
+                except Exception as e:
+                    # Don't fail the whole request on thumbnailing, just log
+                    print('Thumbnail generation failed:', e)
+
+                db.session.add(ImageAttachment(household_id=session.get('household_id'), filename=unique_name, project_id=project.id, caption=img_desc))
+
+        db.session.commit()
         log_activity(session.get('user_id'), 'edit_project', f"Updated project: {project.name}")
         flash(f"Project '{project.name}' updated successfully.", "success")
         return redirect(url_for('project_detail', id=id))
@@ -654,6 +719,103 @@ def activate_someday(id):
     db.session.commit()
     flash(f"Activated '{item.title}'! It is now on your active Kanban board.", "success")
     return redirect(url_for('someday_view'))
+
+@app.route('/inbox')
+
+@app.route('/images/<int:id>/delete', methods=['POST'])
+def delete_image(id):
+    att = db.session.get(ImageAttachment, id)
+    if not att:
+        flash('Image not found.', 'danger')
+        return redirect(request.referrer or url_for('dashboard'))
+
+    # Ensure household ownership
+    if att.household_id != session.get('household_id'):
+        flash('Not authorized to delete this image.', 'danger')
+        return redirect(request.referrer or url_for('dashboard'))
+
+    # Delete files
+    fpath = os.path.join(app.config['UPLOAD_FOLDER'], att.filename)
+    thumb = os.path.join(app.config['UPLOAD_FOLDER'], 'thumbs', att.filename)
+    try:
+        if os.path.exists(fpath):
+            os.remove(fpath)
+        if os.path.exists(thumb):
+            os.remove(thumb)
+    except Exception as e:
+        print('Failed to remove files for image:', e)
+
+    db.session.delete(att)
+    db.session.commit()
+    flash('Image deleted.', 'success')
+    return redirect(request.referrer or url_for('dashboard'))
+
+
+@app.route('/images/<int:id>/edit', methods=['POST'])
+def edit_image(id):
+    att = db.session.get(ImageAttachment, id)
+    if not att:
+        flash('Image not found.', 'danger')
+        return redirect(request.referrer or url_for('dashboard'))
+
+    if att.household_id != session.get('household_id'):
+        flash('Not authorized to edit this image.', 'danger')
+        return redirect(request.referrer or url_for('dashboard'))
+
+    # Get fields
+    caption = request.form.get('caption')
+    new_project_id = request.form.get('project_id')
+    new_action_id = request.form.get('action_id')
+
+    # Normalize
+    new_project_id = int(new_project_id) if new_project_id else None
+    new_action_id = int(new_action_id) if new_action_id else None
+
+    # Validate project belongs to household
+    if new_project_id:
+        proj = db.session.get(Project, new_project_id)
+        if not proj or proj.household_id != session.get('household_id'):
+            flash('Selected project not found or not authorized.', 'danger')
+            return redirect(request.referrer or url_for('dashboard'))
+    if new_action_id:
+        act = db.session.get(ActionItem, new_action_id)
+        if not act or act.household_id != session.get('household_id'):
+            flash('Selected action not found or not authorized.', 'danger')
+            return redirect(request.referrer or url_for('dashboard'))
+
+    # If project changed, attempt to rename files to new slug prefix while preserving uuid
+    try:
+        old_filename = att.filename
+        namepart, ext = (old_filename.rsplit('.', 1) + [''])[:2]
+        # extract uuid part if pattern slug_uuid
+        if '_' in namepart:
+            parts = namepart.rsplit('_', 1)
+            uuidpart = parts[1]
+        else:
+            uuidpart = uuid4().hex
+        target_slug = slugify(db.session.get(Project, new_project_id).name) if new_project_id else (slugify(att.project.name) if att.project else 'unassigned')
+        new_filename = f"{target_slug}_{uuidpart}.{ext}"
+        if new_filename != old_filename:
+            old_path = os.path.join(app.config['UPLOAD_FOLDER'], old_filename)
+            new_path = os.path.join(app.config['UPLOAD_FOLDER'], new_filename)
+            old_thumb = os.path.join(app.config['UPLOAD_FOLDER'], 'thumbs', old_filename)
+            new_thumb = os.path.join(app.config['UPLOAD_FOLDER'], 'thumbs', new_filename)
+            # move files if exist
+            if os.path.exists(old_path):
+                os.replace(old_path, new_path)
+            if os.path.exists(old_thumb):
+                os.replace(old_thumb, new_thumb)
+            att.filename = new_filename
+    except Exception as e:
+        print('Failed renaming file for image edit:', e)
+
+    # Update associations
+    att.caption = caption
+    att.project_id = new_project_id
+    att.action_item_id = new_action_id
+    db.session.commit()
+    flash('Image updated.', 'success')
+    return redirect(request.referrer or url_for('dashboard'))
 
 @app.route('/inbox')
 def inbox():
@@ -856,6 +1018,40 @@ def edit_action(id):
         collaborator_ids = request.form.getlist('collaborators')
         action.collaborators = User.query.filter(User.id.in_(collaborator_ids)).all()
 
+        # Handle uploaded image (optional). Require description when uploading.
+        file = request.files.get('image')
+        img_desc = request.form.get('image_description')
+        if file and file.filename:
+            if not img_desc or not img_desc.strip():
+                flash('Image description is required when uploading an image.', 'danger')
+                return redirect(request.referrer or url_for('edit_action', id=action.id))
+
+            filename = secure_filename(file.filename)
+            ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+            allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+            if ext in allowed:
+                os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+                # Use project slug if available
+                base_slug = slugify(action.project.name) if action.project else 'unassigned'
+                unique_name = f"{base_slug}_{uuid4().hex}.{ext}"
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_name)
+                file.save(filepath)
+
+                # Generate thumbnail
+                try:
+                    thumb_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'thumbs')
+                    os.makedirs(thumb_dir, exist_ok=True)
+                    thumb_path = os.path.join(thumb_dir, unique_name)
+                    with Image.open(filepath) as im:
+                        im.convert('RGB')
+                        im.thumbnail((400, 400))
+                        im.save(thumb_path, format='JPEG', quality=85)
+                except Exception as e:
+                    print('Thumbnail generation failed:', e)
+
+                db.session.add(ImageAttachment(household_id=session.get('household_id'), filename=unique_name, action_item_id=action.id, caption=img_desc))
+
         db.session.commit()
         log_activity(session.get('user_id'), 'edit_action', f"Updated: {action.title}")
         flash("Action updated.", "success")
@@ -864,7 +1060,9 @@ def edit_action(id):
     hid = session.get('household_id')
     all_assets = Asset.query.filter_by(household_id=hid).all()
     all_supplies = Supply.query.filter_by(household_id=hid).all()
-    return render_template('action_edit.html', action=action, all_assets=all_assets, all_supplies=all_supplies)
+    all_projects = Project.query.filter_by(household_id=hid, is_deleted=False).order_by(Project.name).all() if hid else []
+    all_actions = ActionItem.query.filter_by(household_id=hid, is_deleted=False).order_by(ActionItem.title).all() if hid else []
+    return render_template('action_edit.html', action=action, all_assets=all_assets, all_supplies=all_supplies, all_projects=all_projects, all_actions=all_actions)
 
 @app.route('/action/<int:id>/delete', methods=['POST'])
 def delete_action(id):
@@ -969,7 +1167,7 @@ def dashboard(): # User's summary with today's actions from the log
 
     return render_template('dashboard.html', activity=activity, today_completions=completions)
 
-@app.route('/settings')
+@app.route('/settings', methods=['GET', 'POST'])
 def settings_view():
     hid = session.get('household_id')
     
@@ -1004,13 +1202,51 @@ def settings_view():
             ListItem.is_deleted == True,
             ListItem.deleted_at <= purge_cutoff
         ).count()
+
+    # Image stats
+    total_images = 0
+    active_images = 0
+    total_storage_bytes = 0
+    if hid:
+        total_images = ImageAttachment.query.filter_by(household_id=hid).count()
+        # active images = attached to projects that are not completed and not deleted
+        active_images = db.session.query(ImageAttachment).join(Project, ImageAttachment.project_id == Project.id).filter(
+            ImageAttachment.household_id == hid,
+            Project.status != 'completed',
+            Project.is_deleted == False
+        ).count()
+
+        # Calculate total storage by summing file sizes for attachments (include thumbnails if present)
+        attachments = ImageAttachment.query.filter_by(household_id=hid).all()
+        for att in attachments:
+            fpath = os.path.join(app.config['UPLOAD_FOLDER'], att.filename)
+            if os.path.exists(fpath):
+                total_storage_bytes += os.path.getsize(fpath)
+            thumb = os.path.join(app.config['UPLOAD_FOLDER'], 'thumbs', att.filename)
+            if os.path.exists(thumb):
+                total_storage_bytes += os.path.getsize(thumb)
+
     health = get_health_status()
+
+    # Format storage into human-friendly string
+    def sizeof_fmt(num, suffix='B'):
+        for unit in ['','K','M','G','T','P']:
+            if abs(num) < 1024.0:
+                return f"{num:3.1f}{unit}{suffix}"
+            num /= 1024.0
+        return f"{num:.1f}P{suffix}"
+
+    total_storage = sizeof_fmt(total_storage_bytes)
 
     return render_template('settings.html',
                            active_lists_count=active_lists_count,
                            purgeable_lists_count=purgeable_lists_count,
                            purgeable_items_count=purgeable_items_count,
-                           health=health)
+                           health=health,
+                           total_images=total_images,
+                           active_images=active_images,
+                           total_storage_bytes=total_storage_bytes,
+                           total_storage=total_storage)
 
 @app.route('/leaderboard')
 def leaderboard():
