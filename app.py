@@ -282,7 +282,7 @@ def inject_global_data():
     flash_dismiss_time_setting = db.session.get(Setting, 'flash_dismiss_time')
     flash_dismiss_time = int(flash_dismiss_time_setting.value) if flash_dismiss_time_setting else 2000
 
-    all_projects = Project.query.filter_by(household_id=hid, status='active', is_deleted=False).all() if hid else []
+    all_projects = Project.query.filter_by(household_id=hid, status='active', is_deleted=False).order_by(Project.name).all() if hid else []
 
     # Global unprocessed inbox count
     unproc_inbox = InboxItem.query.filter_by(household_id=hid, processed_at=None).count() if hid else 0
@@ -322,8 +322,8 @@ def inject_global_data():
         'Reports': {
             'today_done_view': 'Today\'s Done',
             'leaderboard': 'Leaderboard',
+            'expense_report': 'Expense Report',
             'calendar_view': 'Calendar',
-            'expense_report': 'Expense Report'
         },
         'Management': {
             'manage_projects': 'Projects',
@@ -332,6 +332,9 @@ def inject_global_data():
             'assets': 'Assets',
             'supplies': 'Supplies',
             'archive_view': 'Archive',
+        },
+        'System': {
+            'help_view': 'Help',
         },
         'Admin': {
             'settings_view': 'Settings',
@@ -719,8 +722,6 @@ def activate_someday(id):
     db.session.commit()
     flash(f"Activated '{item.title}'! It is now on your active Kanban board.", "success")
     return redirect(url_for('someday_view'))
-
-@app.route('/inbox')
 
 @app.route('/images/<int:id>/delete', methods=['POST'])
 def delete_image(id):
@@ -1988,6 +1989,10 @@ def switch_user():
         session['user_id'] = user.id
         session['household_id'] = user.household_id
     return redirect(request.referrer or url_for('kanban'))
+
+@app.route('/help')
+def help_view():
+    return render_template('help.html')
 
 if __name__ == '__main__':
     with app.app_context():
