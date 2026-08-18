@@ -31,6 +31,9 @@
                             <h6 class="mb-1">{{ item.title }}</h6>
                             <i class="bi bi-grip-vertical fs-4" style="cursor: grab;"></i>
                         </div>
+                        {% if item.context %}
+                        <small class="text-warning fw-bold card-details">{{ item.context }}</small>
+                        {% endif %}
                         <p class="mb-1 small text-muted card-details">{{ item.description|truncate(100) if item.description else 'No description' }}</p>
                         {% if item.project %}
                         <small class="d-block text-muted card-details">

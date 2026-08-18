@@ -301,6 +301,16 @@ def slugify(text):
     text = text.strip('-')
     return text or 'unassigned'
 
+def format_context(text):
+    """Formats a string into a context tag: lowercase, no spaces, starts with @."""
+    if not text or not text.strip():
+        return None
+    # Lowercase, remove spaces, and strip any existing @ symbols
+    clean_text = text.lower().replace(' ', '').replace('@', '')
+    if not clean_text:
+        return None
+    # Prepend the @ symbol
+    return '@' + clean_text
 
 def log_activity(user_id, action_type, description):
     if user_id:
@@ -546,6 +556,21 @@ def run_migrations():
             # Seed the default value
             db.session.add(Setting(key='flash_dismiss_time', value='2000'))
 
+        # One-time migration to format existing context fields
+        if 'context_format_migration_20260818' not in [s.key for s in Setting.query.all()]:
+            print("Running one-time context formatting migration...")
+            models_with_context = [ActionItem, InboxItem, Asset, Supply]
+            for model in models_with_context:
+                for item in model.query.all():
+                    if item.context:
+                        item.context = format_context(item.context)
+            # Handle HouseholdList's 'location_context' field
+            for h_list in HouseholdList.query.all():
+                if h_list.location_context:
+                    h_list.location_context = format_context(h_list.location_context)
+            db.session.add(Setting(key='context_format_migration_20260818', value='done'))
+            db.session.commit()
+            print("Context formatting migration complete.")
 # ==========================================
 # 5. ROUTES
 # ==========================================
@@ -685,12 +710,7 @@ def edit_project(id):
 
         # Handle uploaded image (optional). Require description if uploading an image.
         file = request.files.get('image')
-        img_desc = request.form.get('image_description')
         if file and file.filename:
-            if not img_desc or not img_desc.strip():
-                flash('Image description is required when uploading an image.', 'danger')
-                return redirect(request.referrer or url_for('edit_project', id=project.id))
-
             filename = secure_filename(file.filename)
             ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
             allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -716,7 +736,7 @@ def edit_project(id):
                     # Don't fail the whole request on thumbnailing, just log
                     print('Thumbnail generation failed:', e)
 
-                db.session.add(ImageAttachment(household_id=session.get('household_id'), filename=unique_name, project_id=project.id, caption=img_desc))
+                db.session.add(ImageAttachment(household_id=session.get('household_id'), filename=unique_name, project_id=project.id, caption=request.form.get('image_description')))
 
         db.session.commit()
         log_activity(session.get('user_id'), 'edit_project', f"Updated project: {project.name}")
@@ -869,7 +889,7 @@ def inbox():
 @app.route('/inbox/add', methods=['POST'])
 def add_inbox():
     db.session.add(InboxItem(household_id=session['household_id'], captured_by_user_id=session['user_id'],
-                             title=request.form.get('title'), context=request.form.get('context'), note=request.form.get('note')))
+                             title=request.form.get('title'), context=format_context(request.form.get('context')), note=request.form.get('note')))
     db.session.commit()
     flash("Captured!", "success")
     return redirect(url_for('inbox'))
@@ -878,13 +898,14 @@ def add_inbox():
 def add_inbox_bulk():
     bulk_text = request.form.get('bulk_items', '')
     context = request.form.get('context', '')
+    formatted_context = format_context(context)
     items = [line.strip() for line in bulk_text.split('\n') if line.strip()]
     for item_title in items:
         db.session.add(InboxItem(
             household_id=session['household_id'],
             captured_by_user_id=session['user_id'],
             title=item_title,
-            context=context
+            context=formatted_context
         ))
     db.session.commit()
     flash(f"Captured {len(items)} items to Inbox!", "success")
@@ -917,7 +938,7 @@ def process_inbox(item_id):
         time_estimate=int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None,
         energy_level=request.form.get('energy_level'),
         complexity_fib=int(request.form.get('complexity_fib')),
-        context=request.form.get('context'),
+        context=format_context(request.form.get('context')),
         project_id=int(project_id) if project_id else None,
         status=status,
         owner_user_id=session['user_id'],
@@ -978,7 +999,7 @@ def add_action():
         complexity_fib=int(request.form.get('complexity_fib', 1)),
         time_estimate=int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None,
         energy_level=request.form.get('energy_level'),
-        context=request.form.get('context'),
+        context=format_context(request.form.get('context')),
         project_id=project_id,
         status=request.form.get('status', 'icebox'),
         owner_user_id=session.get('user_id'),
@@ -1006,6 +1027,7 @@ def add_action_bulk():
     project_id = int(project_id) if project_id else None
     status = request.form.get('status', 'icebox')
     context = request.form.get('context')
+    formatted_context = format_context(context)
 
     for item_title in items:
         sort_order = 0
@@ -1018,7 +1040,7 @@ def add_action_bulk():
             title=item_title,
             project_id=project_id,
             status=status,
-            context=context,
+            context=formatted_context,
             sort_order=sort_order,
             owner_user_id=session.get('user_id')
         )
@@ -1037,7 +1059,7 @@ def edit_action(id):
         action.complexity_fib = int(request.form.get('complexity_fib'))
         action.time_estimate = int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None
         action.energy_level = request.form.get('energy_level')
-        action.context = request.form.get('context')
+        action.context = format_context(request.form.get('context'))
         action.description = request.form.get('description')
         action.status = request.form.get('status')
         project_id = request.form.get('project_id')
@@ -1063,12 +1085,7 @@ def edit_action(id):
 
         # Handle uploaded image (optional). Require description when uploading.
         file = request.files.get('image')
-        img_desc = request.form.get('image_description')
         if file and file.filename:
-            if not img_desc or not img_desc.strip():
-                flash('Image description is required when uploading an image.', 'danger')
-                return redirect(request.referrer or url_for('edit_action', id=action.id))
-
             filename = secure_filename(file.filename)
             ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
             allowed = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
@@ -1093,7 +1110,7 @@ def edit_action(id):
                 except Exception as e:
                     print('Thumbnail generation failed:', e)
 
-                db.session.add(ImageAttachment(household_id=session.get('household_id'), filename=unique_name, action_item_id=action.id, caption=img_desc))
+                db.session.add(ImageAttachment(household_id=session.get('household_id'), filename=unique_name, action_item_id=action.id, caption=request.form.get('image_description')))
 
         db.session.commit()
         log_activity(session.get('user_id'), 'edit_action', f"Updated: {action.title}")
@@ -1501,7 +1518,7 @@ def create_list():
         name=request.form.get('name'),
         description=request.form.get('description'),
         tags=request.form.get('tags'),
-        location_context=request.form.get('location_context')
+        location_context=format_context(request.form.get('location_context'))
     )
     db.session.add(new_list)
     db.session.commit()
@@ -1521,7 +1538,7 @@ def edit_list(id):
     household_list.name = request.form.get('name')
     household_list.description = request.form.get('description')
     household_list.tags = request.form.get('tags')
-    household_list.location_context = request.form.get('location_context')
+    household_list.location_context = format_context(request.form.get('location_context'))
     db.session.commit()
     flash('List updated.', 'success')
     return redirect(url_for('view_list', id=id))
@@ -1613,7 +1630,7 @@ def add_asset():
         household_id=session['household_id'],
         name=request.form.get('name'),
         category=request.form.get('category'),
-        context=request.form.get('context'),
+        context=format_context(request.form.get('context')),
         power_source=request.form.get('power_source'),
         battery_type=request.form.get('battery_type'),
         battery_lifespan_days=int(request.form.get('battery_lifespan_days')) if request.form.get('battery_lifespan_days') else None,
@@ -1653,7 +1670,7 @@ def edit_asset(id):
     if request.method == 'POST':
         asset.name = request.form.get('name')
         asset.category = request.form.get('category')
-        asset.context = request.form.get('context')
+        asset.context = format_context(request.form.get('context'))
         asset.notes = request.form.get('notes')
         asset.purchase_url = request.form.get('purchase_url')
         asset.brand = request.form.get('brand')
@@ -1781,7 +1798,7 @@ def add_supply():
         name=request.form.get('name'),
         quantity=int(request.form.get('quantity') or 1),
         reorder_threshold=int(request.form.get('threshold') or 0),
-        context=request.form.get('context'),
+        context=format_context(request.form.get('context')),
         purchase_url=request.form.get('purchase_url'),
         store_name=request.form.get('store_name'),
         auto_add_to_shopping=auto_add
