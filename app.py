@@ -1,5 +1,6 @@
 import calendar
 import os
+import json
 from datetime import datetime, date, timedelta
 from flask import Flask, request, redirect, url_for, session, flash, render_template, jsonify
 from flask_apscheduler import APScheduler
@@ -19,6 +20,7 @@ app.config['SECRET_KEY'] = 'lan-local-secret-key-modifqy-in-prod'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gtd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
+app.config['BACKUP_FOLDER'] = os.path.join(os.path.dirname(__file__), 'backups')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload size
 
 db = SQLAlchemy(app)
@@ -36,6 +38,44 @@ def archive_done_tasks_job():
             print(f"Archived {len(tasks_to_archive)} tasks.")
         else:
             print("No tasks to archive.")
+
+def daily_backup_job():
+    """Creates a daily backup if changes have been made since the last one."""
+    with app.app_context():
+        backup_dir = app.config['BACKUP_FOLDER']
+        os.makedirs(backup_dir, exist_ok=True)
+
+        last_activity = ActivityLog.query.order_by(ActivityLog.timestamp.desc()).first()
+        if not last_activity:
+            print("Backup job: No activity found, skipping backup.")
+            return
+
+        backup_files = sorted([f for f in os.listdir(backup_dir) if f.endswith('.json')], reverse=True)
+
+        if backup_files:
+            latest_backup_file = backup_files[0]
+            latest_backup_path = os.path.join(backup_dir, latest_backup_file)
+            last_backup_time = datetime.fromtimestamp(os.path.getmtime(latest_backup_path))
+
+            # Compare naive datetimes
+            if last_activity.timestamp.replace(tzinfo=None) <= last_backup_time:
+                print(f"Backup job: No new activity since last backup at {last_backup_time.strftime('%Y-%m-%d %H:%M:%S')}. Skipping.")
+                return
+
+        # If we're here, we need to create a backup
+        backup_filename = f"gtd_backup_{get_local_now().strftime('%Y%m%d_%H%M%S')}.json"
+        filepath = os.path.join(backup_dir, backup_filename)
+        
+        try:
+            with open(filepath, 'w') as f:
+                json.dump(get_export_data(), f, indent=2)
+            print(f"Successfully created data backup: {backup_filename}")
+            log_activity(session.get('user_id'), 'system_backup', f"Created data backup: {backup_filename}")
+        except Exception as e:
+            print(f"Error creating backup file: {e}")
+
+
+
 
 PER_PAGE = 10 # Constant for pagination
 
@@ -362,6 +402,8 @@ def setup_db():
         db.session.add(h)
         db.session.commit()
         u1 = User(name="Admin", role="admin", household_id=h.id)
+        # Create backup folder on first run
+        os.makedirs(app.config['BACKUP_FOLDER'], exist_ok=True)
         u2 = User(name="Member", role="member", household_id=h.id)
         db.session.add_all([u1, u2])
         db.session.commit()
@@ -1976,8 +2018,7 @@ def archive_view():
                            )
 
 @app.route('/admin/run_archive_job', methods=['POST'])
-def run_archive_job():
-    """Manually trigger the archive job."""
+def run_archive_job(): # Manually trigger the archive job
     archive_done_tasks_job()
     flash("Manually triggered archive job.", "info")
     return redirect(url_for('dashboard'))
@@ -1994,10 +2035,27 @@ def switch_user():
 def help_view():
     return render_template('help.html')
 
+def get_export_data():
+    """Helper function to get all database data as a serializable dictionary."""
+    data = {}
+    for table in db.metadata.sorted_tables:
+        rows = db.session.execute(table.select()).mappings().all()
+        table_data = []
+        for row in rows:
+            row_dict = dict(row)
+            for k, v in row_dict.items():
+                if isinstance(v, (datetime, date)):
+                    row_dict[k] = v.isoformat()
+            table_data.append(row_dict)
+        data[table.name] = table_data
+    return data
+
 if __name__ == '__main__':
     with app.app_context():
         run_migrations()
         setup_db()
     scheduler.init_app(app)
+    # Add the new daily backup job to the scheduler
+    scheduler.add_job(id='DailyBackupJob', func=daily_backup_job, trigger='cron', hour=2) # Runs at 2 AM
     scheduler.start()
     app.run(host='0.0.0.0', port=5000, debug=True)
