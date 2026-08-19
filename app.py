@@ -15,9 +15,12 @@ from zoneinfo import ZoneInfo
 # 1. APP CONFIGURATION
 # ==========================================
 # template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'templates'))
+
+# 1. Grab the absolute path of the directory this file is in
 app = Flask(__name__)
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.db')
 app.config['SECRET_KEY'] = 'lan-local-secret-key-modifqy-in-prod'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gtd.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 app.config['BACKUP_FOLDER'] = os.path.join(os.path.dirname(__file__), 'backups')
