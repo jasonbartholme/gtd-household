@@ -317,6 +317,42 @@ def log_activity(user_id, action_type, description):
         db.session.add(ActivityLog(user_id=user_id, action_type=action_type, description=description))
         db.session.commit()
 
+def humanize_time(dt, past_tense='{} ago', future_tense='in {}'):
+    """
+    Returns a human-readable string representing the time difference between now and dt.
+    """
+    if not dt: return ""
+
+    now = get_local_now()
+    if isinstance(dt, date) and not isinstance(dt, datetime):
+        dt = datetime.combine(dt, datetime.min.time())
+
+    diff = now - dt
+    
+    # Determine tense and get total seconds
+    seconds = diff.total_seconds()
+    if seconds < 0:
+        tense = future_tense
+        seconds = abs(seconds)
+    else:
+        tense = past_tense
+
+    if seconds < 60:
+        return "just now"
+
+    diff = abs(diff)
+    days = diff.days
+    
+    def plural(n, unit):
+        return f"{n} {unit}" if n == 1 else f"{n} {unit}s"
+
+    if days >= 365: return tense.format(plural(days // 365, "year"))
+    if days >= 30: return tense.format(plural(days // 30, "month"))
+    if days > 0: return tense.format(plural(days, "day"))
+    if seconds >= 3600: return tense.format(plural(seconds // 3600, "hour"))
+    if seconds >= 60: return tense.format(plural(seconds // 60, "minute"))
+    return "just now"
+
 # ==========================================
 # 4. UTILS & MIDDLEWARE
 # ==========================================
@@ -572,6 +608,9 @@ def run_migrations():
             db.session.commit()
             print("Context formatting migration complete.")
 # ==========================================
+# 5. JINJA FILTERS
+# ==========================================
+app.jinja_env.filters['humanize'] = humanize_time
 # 5. ROUTES
 # ==========================================
 
@@ -1316,17 +1355,23 @@ def leaderboard():
     users = {u.id: u.name for u in User.query.filter_by(household_id=hid).all()}
 
     # Calculate daily points and task counts
+    daily_time_spent = {}
     daily_scores = {}
     daily_task_counts = {}
     for item in completed_items:
         d_str = item.completed_at.date().isoformat()
         key = (item.owner_user_id, d_str)
+        daily_time_spent[key] = daily_time_spent.get(key, 0) + (item.time_estimate or 0)
         daily_scores[key] = daily_scores.get(key, 0) + item.complexity_fib
         daily_task_counts[key] = daily_task_counts.get(key, 0) + 1
 
     today_str = get_local_now().date().isoformat()
 
     # Today's points and tasks
+    todays_time_spent = [{'name': users.get(uid, 'Unknown'), 'minutes': minutes}
+                     for (uid, d_str), minutes in daily_time_spent.items() if d_str == today_str]
+    todays_time_spent.sort(key=lambda x: x['minutes'], reverse=True)
+
     todays_points = [{'name': users.get(uid, 'Unknown'), 'points': pts}
                      for (uid, d_str), pts in daily_scores.items() if d_str == today_str]
     todays_points.sort(key=lambda x: x['points'], reverse=True)
@@ -1336,17 +1381,23 @@ def leaderboard():
     todays_tasks_completed.sort(key=lambda x: x['count'], reverse=True)
 
     # Top 20 lists for all time (per day)
-    all_scores = [{'name': users.get(uid, 'Unknown'), 'date': d_str, 'points': pts}
+    all_time_spent = [{'name': users.get(uid, 'Unknown'), 'date': datetime.strptime(d_str, '%Y-%m-%d').date(), 'minutes': minutes}
+                  for (uid, d_str), minutes in daily_time_spent.items()]
+    top_20_time_spent = sorted(all_time_spent, key=lambda x: x['minutes'], reverse=True)[:20]
+
+    all_scores = [{'name': users.get(uid, 'Unknown'), 'date': datetime.strptime(d_str, '%Y-%m-%d').date(), 'points': pts}
                   for (uid, d_str), pts in daily_scores.items()]
     top_20_point_totals = sorted(all_scores, key=lambda x: x['points'], reverse=True)[:20]
 
-    all_task_counts = [{'name': users.get(uid, 'Unknown'), 'date': d_str, 'count': count}
+    all_task_counts = [{'name': users.get(uid, 'Unknown'), 'date': datetime.strptime(d_str, '%Y-%m-%d').date(), 'count': count}
                        for (uid, d_str), count in daily_task_counts.items()]
     top_20_task_counts = sorted(all_task_counts, key=lambda x: x['count'], reverse=True)[:20]
 
     return render_template('leaderboard.html',
+                           todays_time_spent=todays_time_spent,
                            todays_points=todays_points,
                            todays_tasks_completed=todays_tasks_completed,
+                           top_20_time_spent=top_20_time_spent,
                            top_20_point_totals=top_20_point_totals,
                            top_20_task_counts=top_20_task_counts)
 
@@ -1995,8 +2046,9 @@ def today_done_view():
 
     total_tasks = len(completed_tasks_today)
     total_points = sum(task.complexity_fib for task in completed_tasks_today)
+    total_time = sum(task.time_estimate or 0 for task in completed_tasks_today)
 
-    return render_template('today_done.html', tasks=completed_tasks_today, total_tasks=total_tasks, total_points=total_points)
+    return render_template('today_done.html', tasks=completed_tasks_today, total_tasks=total_tasks, total_points=total_points, total_time=total_time)
 
 @app.route('/archive')
 def archive_view():

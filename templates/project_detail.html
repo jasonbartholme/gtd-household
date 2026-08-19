@@ -10,7 +10,7 @@
                     <span class="badge bg-{{ 'success' if project.status == 'completed' else 'primary' }}">{{ project.status|title }}</span>
                     <span class="badge bg-secondary ms-2">{{ percentage_completed }}% Completed</span>
                 </div>
-                <p class="text-muted mb-0 small">Created on: {{ project.created_at.strftime('%B %d, %Y') }}</p>
+                <p class="text-muted mb-0 small">Created: {{ project.created_at|humanize }}</p>
             </div>
             <div>
                 <a href="{{ url_for('edit_project', id=project.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>

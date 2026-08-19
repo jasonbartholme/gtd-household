@@ -6,8 +6,11 @@
 
     <div class="card mb-4">
         <div class="card-body text-center">
-            <h5 class="mb-2">Total Tasks Completed Today: <span class="badge bg-primary">{{ total_tasks }}</span></h5>
-            <h5 class="mb-0">Total Points Earned Today: <span class="badge bg-success">{{ total_points }}</span></h5>
+            <div class="row">
+                <div class="col"><h5 class="mb-0">Tasks Completed: <span class="badge bg-primary">{{ total_tasks }}</span></h5></div>
+                <div class="col"><h5 class="mb-0">Points Earned: <span class="badge bg-success">{{ total_points }}</span></h5></div>
+                <div class="col"><h5 class="mb-0">Time Spent: <span class="badge bg-secondary">{{ total_time }} min</span></h5></div>
+            </div>
         </div>
     </div>
 
@@ -29,7 +32,7 @@
             </div>
             <div class="text-end">
                 <span class="badge bg-secondary me-2">{{ task.complexity_fib }} pts</span>
-                <small class="text-muted">{{ task.completed_at.strftime('%H:%M') }}</small>
+                <small class="text-muted">{{ task.completed_at|humanize }}</small>
             </div>
         </div>
         {% endfor %}
