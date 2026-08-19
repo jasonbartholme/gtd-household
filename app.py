@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.db')
-app.config['SECRET_KEY'] = 'lan-local-secret-key-modifqy-in-prod'
+app.config['SECRET_KEY'] = 'a-new-super-secret-key-that-is-different'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
 app.config['BACKUP_FOLDER'] = os.path.join(os.path.dirname(__file__), 'backups')
@@ -502,6 +502,13 @@ def calculate_next_due_date(current_date, interval, unit):
         return current_date.replace(year=year, month=month)
     return current_date
 
+@app.route('/logout')
+def logout():
+    """Logs the current user out by clearing their session."""
+    session.clear()
+    flash('You have been successfully logged out.', 'info')
+    return redirect(url_for('kanban'))
+
 def run_migrations():
     """One-time or idempotent migrations to run on startup."""
     from sqlalchemy import inspect
@@ -516,6 +523,7 @@ def run_migrations():
 
     all_tables = inspector.get_table_names()
 
+    db.session.rollback()
     with db.session.begin():
         if 'is_deleted' not in action_item_columns:
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
@@ -608,7 +616,6 @@ def run_migrations():
                 if h_list.location_context:
                     h_list.location_context = format_context(h_list.location_context)
             db.session.add(Setting(key='context_format_migration_20260818', value='done'))
-            db.session.commit()
             print("Context formatting migration complete.")
 # ==========================================
 # 5. JINJA FILTERS
@@ -2124,8 +2131,8 @@ def get_export_data():
 
 if __name__ == '__main__':
     with app.app_context():
-        run_migrations()
         setup_db()
+        run_migrations()
     scheduler.init_app(app)
     # Add the new daily backup job to the scheduler
     scheduler.add_job(id='DailyBackupJob', func=daily_backup_job, trigger='cron', hour=2) # Runs at 2 AM
