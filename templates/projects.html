@@ -15,7 +15,18 @@
                         <span class="badge {{ 'bg-success' if proj.status == 'completed' else 'bg-primary' }}">{{ proj.status|title }}</span>
                     </div>
                     <p class="text-muted small mb-3">{{ proj.description[:100] if proj.description else 'No description provided.' }}</p>
-                    
+
+                    <div class="d-flex justify-content-between align-items-center small mb-2">
+                        {% if proj.estimated_cost %}
+                        <span class="text-warning"><i class="bi bi-cash-coin"></i> Est. ${{ "%.2f"|format(proj.estimated_cost) }}</span>
+                        {% else %}
+                        <span></span>
+                        {% endif %}
+                        {% if proj.due_date %}
+                        <span class="text-muted"><i class="bi bi-calendar-event"></i> Due {{ proj.due_date.strftime('%Y-%m-%d') }}</span>
+                        {% endif %}
+                    </div>
+
                     <div class="d-flex justify-content-between align-items-center small text-muted mb-1">
                         <span>Progress: {{ data.percentage_completed }}%</span>
                         <span class="text-success fw-bold">${{ "%.2f"|format(data.total_cost) }}</span>
@@ -50,6 +61,10 @@
                 <div class="modal-body">
                     <div class="mb-3"><label class="small text-muted">Project Name</label><input type="text" name="name" class="form-control bg-dark text-light border-secondary" required placeholder="E.g., Winterize the House"></div>
                     <div class="mb-3"><label class="small text-muted">Description & Desired Outcome</label><textarea name="description" class="form-control bg-dark text-light border-secondary" rows="3"></textarea></div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><label class="small text-muted">Estimated Cost (Optional)</label><input type="number" step="0.01" name="estimated_cost" class="form-control bg-dark text-light border-secondary" placeholder="0.00"></div>
+                        <div class="col-6"><label class="small text-muted">Estimated Due Date (Optional)</label><input type="date" name="due_date" class="form-control bg-dark text-light border-secondary"></div>
+                    </div>
                     <div class="mb-3"><label class="small text-muted">Related Asset (Optional)</label>
                         <select name="asset_id" class="form-select bg-dark text-light border-secondary">
                             <option value="">None</option>

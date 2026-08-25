@@ -19,13 +19,14 @@
 
     <div class="row g-3" id="kanban-board-container">
         {% for status, col_data in columns.items() %}
-        <div class="col">
+        {% set col_items = items | selectattr('status', 'equalto', status) | list %}
+        <div class="col-12 col-md kanban-col {{ 'kanban-col-empty' if col_items|length == 0 else '' }}">
             <div class="card h-100">
                 <div class="card-header bg-{{ col_data.color }} text-white">
                     {{ col_data.name }}
                 </div>
                 <div class="card-body list-group kanban-column" id="col-{{ status }}" data-status="{{ status }}">
-                    {% for item in items if item.status == status %}
+                    {% for item in col_items %}
                     <div class="list-group-item kanban-card" data-id="{{ item.id }}">
                         <div class="d-flex w-100 justify-content-between">
                             <h6 class="mb-1">{{ item.title }}</h6>
@@ -77,6 +78,20 @@
     min-height: 400px;
     background-color: #343a40;
 }
+@media (max-width: 767.98px) {
+    .kanban-column {
+        min-height: 100px;
+    }
+}
+.kanban-col {
+    transition: flex-basis 0.3s ease, max-width 0.3s ease;
+}
+@media (min-width: 768px) {
+    .kanban-col-empty {
+        flex: 0 1 20%;
+        max-width: 20%;
+    }
+}
 .kanban-card {
     background-color: #495057;
     border: 1px solid #6c757d;
@@ -106,6 +121,15 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // --- Collapse empty columns to 20% width so non-empty columns can grow ---
+    function updateColumnSizes() {
+        document.querySelectorAll('.kanban-column').forEach(col => {
+            const kanbanCol = col.closest('.kanban-col');
+            if (!kanbanCol) return;
+            kanbanCol.classList.toggle('kanban-col-empty', col.children.length === 0);
+        });
+    }
+
     // --- Drag-and-Drop Logic ---
     const columns = document.querySelectorAll('.kanban-column');
     columns.forEach(col => {
@@ -116,6 +140,8 @@ document.addEventListener('DOMContentLoaded', function () {
             onEnd: function (evt) {
                 const itemEl = evt.item; // dragged HTMLElement
                 const toCol = evt.to;   // target list
+
+                updateColumnSizes();
 
                 const itemId = itemEl.getAttribute('data-id');
                 const newStatus = toCol.getAttribute('data-status');
@@ -151,15 +177,19 @@ document.addEventListener('DOMContentLoaded', function () {
                         console.error('Failed to update status');
                         // Optionally, move the card back to its original column on failure
                         evt.from.appendChild(itemEl);
+                        updateColumnSizes();
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
                     evt.from.appendChild(itemEl);
+                    updateColumnSizes();
                 });
             }
         });
     });
+
+    updateColumnSizes();
 
     // --- View Toggle Logic ---
     const boardContainer = document.getElementById('kanban-board-container');

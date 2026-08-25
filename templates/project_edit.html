@@ -16,6 +16,17 @@
                     <textarea class="form-control" id="description" name="description" rows="5">{{ project.description or '' }}</textarea>
                 </div>
 
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="estimated_cost" class="form-label">Estimated Cost (Optional)</label>
+                        <input type="number" step="0.01" class="form-control" id="estimated_cost" name="estimated_cost" value="{{ project.estimated_cost if project.estimated_cost is not none else '' }}">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="due_date" class="form-label">Estimated Due Date (Optional)</label>
+                        <input type="date" class="form-control" id="due_date" name="due_date" value="{{ project.due_date.strftime('%Y-%m-%d') if project.due_date else '' }}">
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label for="image" class="form-label">Upload Image</label>
                     <input type="file" class="form-control" id="image" name="image" accept="image/*">

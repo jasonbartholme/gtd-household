@@ -11,6 +11,9 @@
                     <span class="badge bg-secondary ms-2">{{ percentage_completed }}% Completed</span>
                 </div>
                 <p class="text-muted mb-0 small">Created: {{ project.created_at|humanize }}</p>
+                {% if project.due_date %}
+                <p class="text-muted mb-0 small"><i class="bi bi-calendar-event"></i> Due: {{ project.due_date.strftime('%Y-%m-%d') }}</p>
+                {% endif %}
             </div>
             <div>
                 <a href="{{ url_for('edit_project', id=project.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
@@ -28,6 +31,9 @@
         </div>
         <div class="card-body">
             <h5 class="card-title text-success">Total Expenses: ${{ "%.2f"|format(project_expense_total) }}</h5>
+            {% if project.estimated_cost %}
+            <h6 class="card-subtitle text-warning mb-2">Estimated Cost: ${{ "%.2f"|format(project.estimated_cost) }}</h6>
+            {% endif %}
             <p>{{ project.description or 'No description provided.' }}</p>
 
             {% if project.supplies %}
@@ -68,8 +74,11 @@
     </div>
 
     <h3 class="mt-5 mb-3">Project Tasks</h3>
-    <div class="list-group" id="task-list">
-        {% for action in project.actions %}
+    {% set active_tasks = project.actions | rejectattr('status', 'in', ['done', 'archived']) | list %}
+    {% set completed_tasks = project.actions | selectattr('status', 'in', ['done', 'archived']) | list %}
+
+    <div class="list-group" id="task-list-active">
+        {% for action in active_tasks %}
             <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
                 <div class="d-flex w-100 justify-content-between">
                     <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none">{{ action.title }}</a></h5>
@@ -82,6 +91,22 @@
             <div class="list-group-item">No tasks associated with this project yet.</div>
         {% endfor %}
     </div>
+
+    {% if completed_tasks %}
+    <h5 class="mt-4 mb-2 text-muted"><i class="bi bi-check2-circle"></i> Completed / Archived</h5>
+    <div class="list-group opacity-75" id="task-list-completed">
+        {% for action in completed_tasks %}
+            <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none text-decoration-line-through">{{ action.title }}</a></h5>
+                    <small class="text-muted"><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
+                </div>
+                <p class="mb-1 text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</p>
+                <span class="badge bg-{{ 'success' if action.status == 'done' else 'secondary' }}">{{ action.status|title }}</span>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 
     <h3 class="mt-5 mb-3">Associated Expenses</h3>
     <div class="card">
@@ -108,9 +133,10 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    var el = document.getElementById('task-list');
-    if (el) {
-        var sortable = Sortable.create(el, {
+    function makeSortable(elId) {
+        var el = document.getElementById(elId);
+        if (!el) return;
+        Sortable.create(el, {
             animation: 150,
             handle: '.bi-grip-vertical',
             onEnd: function (evt) {
@@ -133,8 +159,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
-});
 
+    makeSortable('task-list-active');
+    makeSortable('task-list-completed');
+});
+</script>
 
 <!-- Image Edit Modal -->
 <div class="modal fade" id="imageEditModal" tabindex="-1" aria-labelledby="imageEditModalLabel" aria-hidden="true">

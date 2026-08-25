@@ -109,6 +109,8 @@ class Project(db.Model):
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(50), default='active') # active, completed
+    estimated_cost = db.Column(db.Float, nullable=True)
+    due_date = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
@@ -118,7 +120,7 @@ class Project(db.Model):
     asset = db.relationship('Asset', backref=db.backref('projects', lazy='dynamic'))
     expenses = db.relationship('Expense', backref='project', lazy='dynamic')
     images = db.relationship('ImageAttachment', backref='project', lazy=True)
-    supplies = db.relationship('Supply', secondary=project_supply, backref=db.backref('projects', lazy=True))
+    supplies = db.relationship('Supply', secondary='project_supply', backref=db.backref('projects', lazy=True))
 
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -602,6 +604,12 @@ def run_migrations():
             db.session.execute(text('ALTER TABLE supply ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
             db.session.execute(text('ALTER TABLE supply ADD COLUMN deleted_at DATETIME'))
 
+        # Migration 9: Add estimated_cost and due_date to project
+        if 'estimated_cost' not in project_columns:
+            print("Adding 'estimated_cost' and 'due_date' columns to 'project' table...")
+            db.session.execute(text('ALTER TABLE project ADD COLUMN estimated_cost FLOAT'))
+            db.session.execute(text('ALTER TABLE project ADD COLUMN due_date DATETIME'))
+
         # Migration 6: Create the setting table if it doesn't exist
         if 'setting' not in all_tables:
             print("Creating 'setting' table...")
@@ -699,11 +707,14 @@ def manage_projects():
 
 @app.route('/projects/add', methods=['POST'])
 def add_project():
+    due_date_str = request.form.get('due_date')
     p = Project(
         household_id=session.get('household_id'),
         name=request.form.get('name'),
         description=request.form.get('description'),
-        asset_id=int(request.form.get('asset_id')) if request.form.get('asset_id') else None
+        asset_id=int(request.form.get('asset_id')) if request.form.get('asset_id') else None,
+        estimated_cost=float(request.form.get('estimated_cost')) if request.form.get('estimated_cost') else None,
+        due_date=datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
     )
     db.session.add(p)
     db.session.commit()
@@ -762,6 +773,10 @@ def edit_project(id):
         project.name = request.form.get('name')
         project.description = request.form.get('description')
         project.asset_id = int(request.form.get('asset_id')) if request.form.get('asset_id') else None
+
+        project.estimated_cost = float(request.form.get('estimated_cost')) if request.form.get('estimated_cost') else None
+        due_date_str = request.form.get('due_date')
+        project.due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
 
         supply_ids = request.form.getlist('supplies')
         project.supplies = Supply.query.filter(Supply.id.in_(supply_ids)).all() if supply_ids else []
