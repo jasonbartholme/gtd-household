@@ -186,6 +186,7 @@ class ActionItem(db.Model):
     lat = db.Column(db.Float, nullable=True)
     lng = db.Column(db.Float, nullable=True)
 
+    owner = db.relationship('User', foreign_keys=[owner_user_id], backref='owned_actions')
     assets = db.relationship('Asset', secondary=action_asset, backref=db.backref('actions', lazy=True))
     supplies = db.relationship('Supply', secondary=action_supply, backref=db.backref('actions', lazy=True))
     collaborators = db.relationship('User', secondary=action_collaborators, lazy='subquery', backref=db.backref('collaborations', lazy=True))
@@ -1284,14 +1285,33 @@ def icebox_view():
 @app.route('/review')
 def review():
     hid = session.get('household_id')
-    inbox_count = InboxItem.query.filter_by(household_id=hid, processed_at=None).count()
-    someday_count = ActionItem.query.filter_by(household_id=hid, status='someday').count()
-    waiting = ActionItem.query.filter_by(household_id=hid, status='waiting').all()
+    now = get_local_now()
+    active_statuses = ['icebox', 'ready', 'in_progress', 'blocked', 'waiting']
+    active_tasks = ActionItem.query.filter(
+        ActionItem.household_id == hid,
+        ActionItem.status.in_(active_statuses),
+        ActionItem.is_deleted == False
+    )
 
-    recurring = ActionItem.query.filter_by(household_id=hid, is_recurring=True).all()
-    active_recurring = [item for item in recurring if item.status != 'done']
+    unassigned_tasks = active_tasks.filter(
+        db.or_(ActionItem.project_id.is_(None), ActionItem.owner_user_id.is_(None))
+    ).order_by(ActionItem.due_date.asc().nullslast(), ActionItem.created_at.desc()).all()
+    overdue_tasks = active_tasks.filter(
+        ActionItem.due_date.isnot(None),
+        ActionItem.due_date < now
+    ).order_by(ActionItem.due_date.asc()).all()
+    blocked_tasks = active_tasks.filter_by(status='blocked').order_by(ActionItem.due_date.asc().nullslast()).all()
+    waiting_tasks = active_tasks.filter_by(status='waiting').order_by(ActionItem.due_date.asc().nullslast()).all()
+    icebox_tasks = active_tasks.filter_by(status='icebox').order_by(ActionItem.created_at.asc()).all()
 
-    return render_template('review.html', inbox_count=inbox_count, someday_count=someday_count, waiting_items=waiting, recurring_items=active_recurring)
+    return render_template(
+        'review.html',
+        unassigned_tasks=unassigned_tasks,
+        overdue_tasks=overdue_tasks,
+        blocked_tasks=blocked_tasks,
+        waiting_tasks=waiting_tasks,
+        icebox_tasks=icebox_tasks
+    )
 
 @app.route('/dashboard')
 def dashboard(): # User's summary with today's actions from the log

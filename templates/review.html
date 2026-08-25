@@ -1,38 +1,73 @@
 {% extends "base.html" %}
     {% block content %}
-    <div class="text-center py-4"><h2 class="text-info fw-bold mb-4" data-bs-toggle="tooltip" title="The Weekly Review is the key to GTD. Get clear, get current, and get creative. Empty your inbox and review active lists." style="cursor: help;">Weekly Review ℹ️</h2>
-        <div class="row justify-content-center">
-            <div class="col-md-6">
-                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
-                    <h5 class="text-primary" data-bs-toggle="tooltip" title="Process everything to zero. Decide what each item is and what the next action is." style="cursor: help;">Inbox ({{ inbox_count }}) ℹ️</h5>
-                    <a href="{{ url_for('inbox') }}" class="btn btn-sm btn-primary px-4">Process</a>
+    <div class="container-fluid py-2">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="text-info fw-bold mb-1">Review</h2>
+                <p class="text-muted mb-0">Resolve tasks that need attention before planning your next work.</p>
+            </div>
+            <a href="{{ url_for('kanban') }}" class="btn btn-sm btn-outline-secondary">Open Board</a>
+        </div>
+
+        {% macro task_row(task, label=None) %}
+        <div class="list-group-item bg-dark text-light border-secondary">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <a href="{{ url_for('edit_action', id=task.id) }}" class="text-info text-decoration-none fw-semibold">{{ task.title }}</a>
+                    <div class="small text-muted mt-1">
+                        {% if task.project %}
+                        <a href="{{ url_for('project_detail', id=task.project.id) }}" class="text-muted">{{ task.project.name }}</a>
+                        {% else %}No project{% endif %}
+                        {% if task.owner %} | {{ task.owner.name }}{% else %} | No owner{% endif %}
+                    </div>
                 </div>
-                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
-                    <h5 class="text-secondary" data-bs-toggle="tooltip" title="Review ideas you put on hold. Are you ready to activate any of them?" style="cursor: help;">Someday / Maybe ({{ someday_count }}) ℹ️</h5>
-                    <a href="{{ url_for('someday_view') }}" class="btn btn-sm btn-secondary px-4">Review Ideas</a>
+                <div class="text-end text-nowrap">
+                    {% if label %}<span class="badge bg-{{ 'danger' if label == 'Overdue' else 'warning text-dark' }}">{{ label }}</span>{% endif %}
+                    {% if task.due_date %}<small class="d-block text-muted">Due {{ task.due_date.strftime('%Y-%m-%d') }}</small>{% endif %}
                 </div>
-                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
-                    <h5 class="text-warning" data-bs-toggle="tooltip" title="Review items blocked by others. Follow up with them if necessary!" style="cursor: help;">Waiting On ℹ️</h5>
-                    <ul class="list-group list-group-flush">
-                        {% for item in waiting_items %}
-                        <li class="list-group-item bg-dark text-light border-secondary small">{{ item.title }}</li>
-                        {% else %}
-                        <li class="list-group-item bg-dark text-muted border-secondary small">No pending items.</li>
-                        {% endfor %}
-                    </ul>
+            </div>
+        </div>
+        {% endmacro %}
+
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between"><span>Unassigned Tasks</span><span class="badge bg-secondary">{{ unassigned_tasks|length }}</span></div>
+                    <div class="list-group list-group-flush">
+                        {% for task in unassigned_tasks %}{{ task_row(task, 'No project' if not task.project else 'No owner') }}{% else %}<div class="list-group-item text-muted">All active tasks have a project and owner.</div>{% endfor %}
+                    </div>
                 </div>
-                <div class="card bg-dark border-secondary text-start p-4 mb-3 shadow">
-                    <h5 class="text-info">Active Recurring Chores</h5>
-                    <ul class="list-group list-group-flush">
-                        {% for item in recurring_items %}
-                        <li class="list-group-item bg-dark text-light border-secondary small d-flex justify-content-between align-items-center">
-                            <span><a href="{{ url_for('edit_action', id=item.id) }}" class="text-info text-decoration-none">{{ item.title }}</a></span>
-                            <span class="badge bg-secondary">Every {{ item.recur_interval }} {{ item.recur_unit }}</span>
-                        </li>
-                        {% else %}
-                        <li class="list-group-item bg-dark text-muted border-secondary small">No recurring items setup.</li>
-                        {% endfor %}
-                    </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between"><span>Overdue Tasks</span><span class="badge bg-danger">{{ overdue_tasks|length }}</span></div>
+                    <div class="list-group list-group-flush">
+                        {% for task in overdue_tasks %}{{ task_row(task, 'Overdue') }}{% else %}<div class="list-group-item text-muted">No overdue tasks.</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between"><span>Blocked Tasks</span><span class="badge bg-danger">{{ blocked_tasks|length }}</span></div>
+                    <div class="list-group list-group-flush">
+                        {% for task in blocked_tasks %}{{ task_row(task, 'Blocked') }}{% else %}<div class="list-group-item text-muted">No blocked tasks.</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between"><span>Waiting On</span><span class="badge bg-warning text-dark">{{ waiting_tasks|length }}</span></div>
+                    <div class="list-group list-group-flush">
+                        {% for task in waiting_tasks %}{{ task_row(task, 'Waiting') }}{% else %}<div class="list-group-item text-muted">No waiting tasks.</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center"><span>Icebox</span><a href="{{ url_for('icebox_view') }}" class="btn btn-sm btn-outline-info">Manage Icebox ({{ icebox_tasks|length }})</a></div>
+                    <div class="list-group list-group-flush">
+                        {% for task in icebox_tasks %}{{ task_row(task) }}{% else %}<div class="list-group-item text-muted">The Icebox is empty.</div>{% endfor %}
+                    </div>
                 </div>
             </div>
         </div>
