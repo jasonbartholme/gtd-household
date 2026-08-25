@@ -2009,7 +2009,6 @@ def manage_expenses():
             return redirect(url_for('manage_expenses'))
 
         new_expense = Expense(
-            household_id=hid,
             project_id=int(request.form.get('project_id')) if request.form.get('project_id') else None,
             amount=amount,
             description=request.form.get('description'),
