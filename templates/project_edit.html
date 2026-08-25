@@ -31,6 +31,15 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="mb-3">
+                    <label for="supplies" class="form-label">Supplies Used</label>
+                    <select class="form-select" id="supplies" name="supplies" multiple size="5">
+                        {% set selected_supply_ids = project.supplies | map(attribute='id') | list %}
+                        {% for supply in all_supplies %}
+                        <option value="{{ supply.id }}" {% if supply.id in selected_supply_ids %}selected{% endif %}>{{ supply.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
                 <a href="{{ url_for('project_detail', id=project.id) }}" class="btn btn-secondary">Cancel</a>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
             </form>

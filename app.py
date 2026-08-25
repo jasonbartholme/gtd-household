@@ -118,6 +118,7 @@ class Project(db.Model):
     asset = db.relationship('Asset', backref=db.backref('projects', lazy='dynamic'))
     expenses = db.relationship('Expense', backref='project', lazy='dynamic')
     images = db.relationship('ImageAttachment', backref='project', lazy=True)
+    supplies = db.relationship('Supply', secondary=project_supply, backref=db.backref('projects', lazy=True))
 
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -142,6 +143,11 @@ action_supply = db.Table('action_supply',
 
 asset_supply = db.Table('asset_supply',
     db.Column('asset_id', db.Integer, db.ForeignKey('asset.id'), primary_key=True),
+    db.Column('supply_id', db.Integer, db.ForeignKey('supply.id'), primary_key=True)
+)
+
+project_supply = db.Table('project_supply',
+    db.Column('project_id', db.Integer, db.ForeignKey('project.id'), primary_key=True),
     db.Column('supply_id', db.Integer, db.ForeignKey('supply.id'), primary_key=True)
 )
 
@@ -757,6 +763,9 @@ def edit_project(id):
         project.description = request.form.get('description')
         project.asset_id = int(request.form.get('asset_id')) if request.form.get('asset_id') else None
 
+        supply_ids = request.form.getlist('supplies')
+        project.supplies = Supply.query.filter(Supply.id.in_(supply_ids)).all() if supply_ids else []
+
         # Handle uploaded image (optional). Require description if uploading an image.
         file = request.files.get('image')
         if file and file.filename:
@@ -778,7 +787,7 @@ def edit_project(id):
                     os.makedirs(thumb_dir, exist_ok=True)
                     thumb_path = os.path.join(thumb_dir, unique_name)
                     with Image.open(filepath) as im:
-                        im.convert('RGB')
+                        im = im.convert('RGB')
                         im.thumbnail((400, 400))
                         im.save(thumb_path, format='JPEG', quality=85)
                 except Exception as e:
@@ -794,7 +803,8 @@ def edit_project(id):
 
     hid = session.get('household_id')
     all_assets = Asset.query.filter_by(household_id=hid).order_by(Asset.name).all()
-    return render_template('project_edit.html', project=project, all_assets=all_assets)
+    all_supplies = Supply.query.filter_by(household_id=hid, is_deleted=False).order_by(Supply.name).all()
+    return render_template('project_edit.html', project=project, all_assets=all_assets, all_supplies=all_supplies)
 
 @app.route('/projects/<int:id>/delete', methods=['POST'])
 def delete_project(id):
@@ -1153,7 +1163,7 @@ def edit_action(id):
                     os.makedirs(thumb_dir, exist_ok=True)
                     thumb_path = os.path.join(thumb_dir, unique_name)
                     with Image.open(filepath) as im:
-                        im.convert('RGB')
+                        im = im.convert('RGB')
                         im.thumbnail((400, 400))
                         im.save(thumb_path, format='JPEG', quality=85)
                 except Exception as e:
@@ -1847,7 +1857,8 @@ def add_asset_expense(id):
 def supplies():
     hid = session.get('household_id')
     items = Supply.query.filter_by(household_id=hid, is_deleted=False).all()
-    return render_template('supplies.html', supplies=items)
+    all_projects = Project.query.filter_by(household_id=hid, is_deleted=False).order_by(Project.name).all() if hid else []
+    return render_template('supplies.html', supplies=items, all_projects=all_projects)
 
 @app.route('/supplies/add', methods=['POST'])
 def add_supply():
@@ -1867,6 +1878,10 @@ def add_supply():
     db.session.add(new_supply)
     db.session.flush()
 
+    project_ids = request.form.getlist('projects')
+    if project_ids:
+        new_supply.projects = Project.query.filter(Project.id.in_(project_ids)).all()
+
     if add_now:
         content = f"Buy: {new_supply.name}"
         if new_supply.store_name:
@@ -1879,6 +1894,29 @@ def add_supply():
 
     db.session.commit()
     log_activity(session.get('user_id'), 'add_supply', f"Added supply: {new_supply.name}")
+    return redirect(url_for('supplies'))
+
+@app.route('/supplies/<int:id>/edit', methods=['POST'])
+def edit_supply(id):
+    supply = db.session.get(Supply, id)
+    if not supply or supply.household_id != session.get('household_id'):
+        flash("Supply not found.", "danger")
+        return redirect(url_for('supplies'))
+
+    supply.name = request.form.get('name')
+    supply.quantity = int(request.form.get('quantity') or 1)
+    supply.reorder_threshold = int(request.form.get('threshold') or 0)
+    supply.context = format_context(request.form.get('context'))
+    supply.purchase_url = request.form.get('purchase_url')
+    supply.store_name = request.form.get('store_name')
+    supply.auto_add_to_shopping = 'auto_add_to_shopping' in request.form
+
+    project_ids = request.form.getlist('projects')
+    supply.projects = Project.query.filter(Project.id.in_(project_ids)).all() if project_ids else []
+
+    db.session.commit()
+    log_activity(session.get('user_id'), 'edit_supply', f"Updated supply: {supply.name}")
+    flash(f"Supply '{supply.name}' updated.", "success")
     return redirect(url_for('supplies'))
 
 @app.route('/supplies/<int:id>/delete', methods=['POST'])

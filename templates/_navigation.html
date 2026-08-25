@@ -37,17 +37,19 @@
 </ul>
 
 <hr>
+{% if not in_offcanvas %}
 <div class="text-center mb-2">
     <button class="btn btn-sm btn-outline-secondary" id="sidebar-toggle">
         <i class="bi bi-chevron-left"></i>
     </button>
 </div>
+{% endif %}
 
 <div class="dropdown">
-    <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
+    <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser{{ '-offcanvas' if in_offcanvas else '1' }}" data-bs-toggle="dropdown" aria-expanded="false">
         <strong class="nav-text">{{ current_user.name if current_user else 'System' }}</strong>
     </a>
-    <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
+    <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser{{ '-offcanvas' if in_offcanvas else '1' }}">
         <li><a class="dropdown-item" href="{{ url_for('manage_users') }}">Manage Users</a></li>
         <li><a class="dropdown-item" href="{{ url_for('dashboard') }}">Dashboard</a></li>
         <li><hr class="dropdown-divider"></li>

@@ -13,12 +13,30 @@
                 {% if supply.store_name %}
                     <p class="text-warning small mb-1"><i class="bi bi-shop"></i> {{ supply.store_name }}</p>
                 {% endif %}
+                {% if supply.projects %}
+                    <p class="text-info small mb-1"><i class="bi bi-folder2-open"></i> {{ supply.projects | map(attribute='name') | join(', ') }}</p>
+                {% endif %}
                 <h2 class="{{ 'text-danger' if supply.quantity <= supply.reorder_threshold else 'text-success' }}">{{ supply.quantity }}</h2>
                 <div class="d-grid gap-2 mt-auto">
                     <form action="{{ url_for('use_supply', id=supply.id) }}" method="POST"><button class="btn btn-sm btn-outline-info w-100">Use</button></form>
                     {% if supply.purchase_url %}
                         <a href="{{ supply.purchase_url }}" target="_blank" class="btn btn-sm btn-link text-info text-decoration-none small">Buy Online</a>
                     {% endif %}
+                    <button type="button" class="btn btn-sm btn-outline-secondary edit-supply-btn"
+                        data-id="{{ supply.id }}"
+                        data-name="{{ supply.name }}"
+                        data-quantity="{{ supply.quantity }}"
+                        data-threshold="{{ supply.reorder_threshold }}"
+                        data-context="{{ supply.context or '' }}"
+                        data-purchase-url="{{ supply.purchase_url or '' }}"
+                        data-store-name="{{ supply.store_name or '' }}"
+                        data-auto-add="{{ 'true' if supply.auto_add_to_shopping else 'false' }}"
+                        data-project-ids="{{ supply.projects | map(attribute='id') | list | join(',') }}">
+                        <i class="bi bi-pencil"></i> Edit
+                    </button>
+                    <form action="{{ url_for('delete_supply', id=supply.id) }}" method="POST" class="confirm-delete">
+                        <button type="submit" class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Delete</button>
+                    </form>
                 </div>
             </div>
         </div>
@@ -40,6 +58,14 @@
                         <div class="mb-3"><label class="small text-muted">Context (Location in House)</label><input type="text" name="context" class="form-control bg-dark text-light border-secondary" placeholder="Kitchen, Garage..."></div>
                         <div class="mb-3"><label class="small text-muted">Purchase URL</label><input type="url" name="purchase_url" class="form-control bg-dark text-light border-secondary" placeholder="https://amazon.com/..."></div>
                         <div class="mb-3"><label class="small text-muted">Store/Location (Where to buy)</label><input type="text" name="store_name" class="form-control bg-dark text-light border-secondary" placeholder="e.g. Home Depot, Costco"></div>
+                        <div class="mb-3">
+                            <label class="small text-muted">Used By Projects</label>
+                            <select name="projects" class="form-select bg-dark text-light border-secondary" multiple size="4">
+                                {% for project in all_projects %}
+                                <option value="{{ project.id }}">{{ project.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <hr class="border-secondary">
                         <div class="form-check mb-2">
                             <input class="form-check-input" type="checkbox" name="auto_add_to_shopping" id="autoAdd" checked>
@@ -59,4 +85,69 @@
             </div>
         </div>
     </div>
+
+    <!-- Edit Supply Modal -->
+    <div class="modal fade" id="editSupplyModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content bg-dark text-light border-secondary">
+                <form id="edit-supply-form" method="POST">
+                    <div class="modal-header border-secondary"><h5 class="modal-title">Edit Supply Item</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                    <div class="modal-body">
+                        <div class="mb-3"><label class="small text-muted">Item Name</label><input type="text" name="name" id="edit-supply-name" class="form-control bg-dark text-light border-secondary" required></div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6"><label class="small text-muted">Qty</label><input type="number" name="quantity" id="edit-supply-quantity" class="form-control bg-dark text-light border-secondary"></div>
+                            <div class="col-6"><label class="small text-muted">Reorder Threshold</label><input type="number" name="threshold" id="edit-supply-threshold" class="form-control bg-dark text-light border-secondary"></div>
+                        </div>
+                        <div class="mb-3"><label class="small text-muted">Context (Location in House)</label><input type="text" name="context" id="edit-supply-context" class="form-control bg-dark text-light border-secondary"></div>
+                        <div class="mb-3"><label class="small text-muted">Purchase URL</label><input type="url" name="purchase_url" id="edit-supply-purchase-url" class="form-control bg-dark text-light border-secondary"></div>
+                        <div class="mb-3"><label class="small text-muted">Store/Location (Where to buy)</label><input type="text" name="store_name" id="edit-supply-store-name" class="form-control bg-dark text-light border-secondary"></div>
+                        <div class="mb-3">
+                            <label class="small text-muted">Used By Projects</label>
+                            <select name="projects" id="edit-supply-projects" class="form-select bg-dark text-light border-secondary" multiple size="4">
+                                {% for project in all_projects %}
+                                <option value="{{ project.id }}">{{ project.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <hr class="border-secondary">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" name="auto_add_to_shopping" id="edit-supply-auto-add">
+                            <label class="form-check-label small" for="edit-supply-auto-add">
+                                Auto-add to Shopping List when stock is low
+                            </label>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary"><button type="submit" class="btn btn-primary w-100">Save Changes</button></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function(){
+            var editModalEl = document.getElementById('editSupplyModal');
+            if (!editModalEl) return;
+            var editModal = new bootstrap.Modal(editModalEl);
+            document.querySelectorAll('.edit-supply-btn').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    var id = btn.getAttribute('data-id');
+                    document.getElementById('edit-supply-form').action = '/supplies/' + id + '/edit';
+                    document.getElementById('edit-supply-name').value = btn.getAttribute('data-name');
+                    document.getElementById('edit-supply-quantity').value = btn.getAttribute('data-quantity');
+                    document.getElementById('edit-supply-threshold').value = btn.getAttribute('data-threshold');
+                    document.getElementById('edit-supply-context').value = btn.getAttribute('data-context');
+                    document.getElementById('edit-supply-purchase-url').value = btn.getAttribute('data-purchase-url');
+                    document.getElementById('edit-supply-store-name').value = btn.getAttribute('data-store-name');
+                    document.getElementById('edit-supply-auto-add').checked = btn.getAttribute('data-auto-add') === 'true';
+
+                    var projectIds = (btn.getAttribute('data-project-ids') || '').split(',').filter(Boolean);
+                    document.querySelectorAll('#edit-supply-projects option').forEach(function(opt){
+                        opt.selected = projectIds.indexOf(opt.value) !== -1;
+                    });
+
+                    editModal.show();
+                });
+            });
+        })();
+    </script>
     {% endblock %}
