@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Context Report</h1>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            {% if context_labels %}
+            <div class="row align-items-center">
+                <div class="col-lg-7">
+                    <canvas id="contextChart" height="240"></canvas>
+                </div>
+                <div class="col-lg-5">
+                    <div class="list-group list-group-flush">
+                        {% for context, tasks in context_breakdown %}
+                        <div class="list-group-item px-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>{{ context }}</strong></span>
+                                <span class="badge bg-primary rounded-pill">{{ tasks|length }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-5">
+                <h5 class="mb-2">No active contexts</h5>
+                <p class="mb-0">There are no tasks with a context value that are not completed or archived.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Context Breakdown</h5>
+        </div>
+        <div class="list-group list-group-flush">
+            {% if context_breakdown %}
+                {% for context, tasks in context_breakdown %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">{{ context }}</h6>
+                        <span class="badge bg-secondary">{{ tasks|length }} task{% if tasks|length != 1 %}s{% endif %}</span>
+                    </div>
+                    <div class="row g-2">
+                        {% for task in tasks %}
+                        <div class="col-md-6 col-xl-4">
+                            <div class="border rounded p-2 h-100">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <strong>{{ task.title }}</strong>
+                                        {% if task.project %}
+                                        <div class="small text-muted">{{ task.project.name }}</div>
+                                        {% endif %}
+                                    </div>
+                                    {% if task.status %}
+                                    <span class="badge text-bg-light text-dark">{{ task.status }}</span>
+                                    {% endif %}
+                                </div>
+                                {% if task.description %}
+                                <div class="small text-muted mt-2">{{ task.description|truncate(140) }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="list-group-item text-muted text-center py-4">
+                No tasks with contexts to display.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const contextChartEl = document.getElementById('contextChart');
+        if (!contextChartEl) return;
+
+        const labels = {{ context_labels|tojson }};
+        const values = {{ context_data|tojson }};
+        const colors = [
+            '#0d6efd', '#198754', '#dc3545', '#ffc107', '#0dcaf0', '#fd7e14',
+            '#6f42c1', '#20c997', '#e83e8c', '#adb5bd', '#6610f2', '#17a2b8'
+        ];
+
+        new Chart(contextChartEl, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderColor: '#212529',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#f8f9fa',
+                            usePointStyle: true,
+                            boxWidth: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed || 0;
+                                return `${context.label}: ${value} task${value === 1 ? '' : 's'}`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

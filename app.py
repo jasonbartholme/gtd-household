@@ -117,10 +117,23 @@ class Project(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
 
     actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
+    phases = db.relationship('ProjectPhase', backref='project', lazy=True, order_by='ProjectPhase.sort_order')
     asset = db.relationship('Asset', backref=db.backref('projects', lazy='dynamic'))
     expenses = db.relationship('Expense', backref='project', lazy='dynamic')
     images = db.relationship('ImageAttachment', backref='project', lazy=True)
     supplies = db.relationship('Supply', secondary='project_supply', backref=db.backref('projects', lazy=True))
+
+class ProjectPhase(db.Model):
+    __tablename__ = 'project_phase'
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)
+    household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    sort_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    is_deleted = db.Column(db.Boolean, default=False)
+
+    actions = db.relationship('ActionItem', backref='phase', lazy=True)
 
 class InboxItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -162,6 +175,7 @@ class ActionItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    phase_id = db.Column(db.Integer, db.ForeignKey('project_phase.id'), nullable=True)
     title = db.Column(db.String(200), nullable=False)
     context = db.Column(db.String(100), nullable=True)
     description = db.Column(db.Text, nullable=True)
@@ -392,6 +406,7 @@ def inject_global_data():
         'kanban': 'Board',
         'inbox': 'Inbox',
         'today_done_view': 'Today\'s Done',
+        'context_report': 'Context Report',
         'review': 'Review',
         'manage_projects': 'Projects',
         'manage_lists': 'Lists',
@@ -420,6 +435,7 @@ def inject_global_data():
         'Reports': {
             'today_done_view': 'Today\'s Done',
             'leaderboard': 'Leaderboard',
+            'context_report': 'Context Report',
             'expense_report': 'Expense Report',
             'calendar_view': 'Calendar',
         },
@@ -529,11 +545,48 @@ def run_migrations():
     expense_columns = [c['name'] for c in inspector.get_columns('expense')]
     asset_columns = [c['name'] for c in inspector.get_columns('asset')]
     supply_columns = [c['name'] for c in inspector.get_columns('supply')]
+    project_phase_columns = [c['name'] for c in inspector.get_columns('project_phase')] if 'project_phase' in inspector.get_table_names() else []
 
     all_tables = inspector.get_table_names()
 
     db.session.rollback()
     with db.session.begin():
+        if 'project_phase' not in all_tables:
+            print("Creating 'project_phase' table...")
+            ProjectPhase.__table__.create(db.engine)
+
+        if 'phase_id' not in action_item_columns:
+            print("Adding 'phase_id' column to 'action_item' table...")
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN phase_id INTEGER REFERENCES project_phase(id)'))
+            print("'phase_id' column added.")
+
+        if 'household_id' not in project_phase_columns:
+            print("Adding 'household_id' column to 'project_phase' table...")
+            db.session.execute(text('ALTER TABLE project_phase ADD COLUMN household_id INTEGER REFERENCES household(id)'))
+            print("'household_id' column added.")
+
+        if 'is_deleted' not in project_phase_columns:
+            db.session.execute(text('ALTER TABLE project_phase ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+
+        if 'created_at' not in project_phase_columns:
+            db.session.execute(text('ALTER TABLE project_phase ADD COLUMN created_at DATETIME'))
+
+        if 'sort_order' not in project_phase_columns:
+            db.session.execute(text('ALTER TABLE project_phase ADD COLUMN sort_order INTEGER DEFAULT 0'))
+
+        for project in Project.query.all():
+            if not ProjectPhase.query.filter_by(project_id=project.id, is_deleted=False).first():
+                db.session.add(ProjectPhase(project_id=project.id, household_id=project.household_id, name='General', sort_order=0))
+
+        for task in ActionItem.query.filter_by(project_id=None).all():
+            task.phase_id = None
+
+        for task in ActionItem.query.filter(ActionItem.project_id.isnot(None)).all():
+            if task.phase_id is None:
+                default_phase = get_default_project_phase(task.project_id)
+                if default_phase:
+                    task.phase_id = default_phase.id
+
         if 'is_deleted' not in action_item_columns:
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN deleted_at DATETIME'))
@@ -719,6 +772,9 @@ def add_project():
     )
     db.session.add(p)
     db.session.commit()
+    default_phase = ProjectPhase(project_id=p.id, household_id=p.household_id, name='General', sort_order=0)
+    db.session.add(default_phase)
+    db.session.commit()
     flash(f"Created Project: {p.name}", "success")
     return redirect(url_for('manage_projects'))
 
@@ -728,6 +784,7 @@ def project_detail(id):
     project_expenses = []
     project_expense_total = 0.0
     percentage_completed = 0
+    phase_groups = []
 
     if not project:
         flash("Project not found.", "danger")
@@ -740,6 +797,30 @@ def project_detail(id):
         completed_actions = sum(1 for action in project.actions if action.status in ['done', 'archived'])
         percentage_completed = (completed_actions / total_actions * 100) if total_actions > 0 else 0
 
+        phases = ProjectPhase.query.filter_by(project_id=project.id, is_deleted=False).order_by(ProjectPhase.sort_order.asc(), ProjectPhase.created_at.asc()).all()
+        if not phases:
+            default_phase = ProjectPhase(project_id=project.id, household_id=project.household_id, name='General', sort_order=0)
+            db.session.add(default_phase)
+            db.session.commit()
+            phases = [default_phase]
+
+        for phase in phases:
+            active_tasks = ActionItem.query.filter_by(project_id=project.id, phase_id=phase.id, is_deleted=False).order_by(ActionItem.sort_order.asc()).all()
+            phase_groups.append({
+                'phase': phase,
+                'active_tasks': [task for task in active_tasks if task.status not in ['done', 'archived']],
+                'completed_tasks': [task for task in active_tasks if task.status in ['done', 'archived']]
+            })
+
+        unassigned_tasks = ActionItem.query.filter_by(project_id=project.id, phase_id=None, is_deleted=False).order_by(ActionItem.sort_order.asc()).all()
+        if unassigned_tasks:
+            phase_groups.insert(0, {
+                'phase': None,
+                'active_tasks': [task for task in unassigned_tasks if task.status not in ['done', 'archived']],
+                'completed_tasks': [task for task in unassigned_tasks if task.status in ['done', 'archived']],
+                'name': 'Unassigned'
+            })
+
     hid = session.get('household_id')
     all_projects = Project.query.filter_by(household_id=hid, is_deleted=False).order_by(Project.name).all() if hid else []
     all_actions = ActionItem.query.filter_by(household_id=hid, is_deleted=False).order_by(ActionItem.title).all() if hid else []
@@ -750,7 +831,27 @@ def project_detail(id):
                            project_expense_total=project_expense_total,
                            percentage_completed=round(percentage_completed),
                            all_projects=all_projects,
-                           all_actions=all_actions)
+                           all_actions=all_actions,
+                           phase_groups=phase_groups)
+
+@app.route('/projects/<int:id>/phases/add', methods=['POST'])
+def add_project_phase(id):
+    project = db.session.get(Project, id)
+    if not project or project.household_id != session.get('household_id'):
+        flash('Project not found.', 'danger')
+        return redirect(url_for('manage_projects'))
+
+    name = (request.form.get('name') or '').strip()
+    if name:
+        next_order = ProjectPhase.query.filter_by(project_id=id, is_deleted=False).count()
+        phase = ProjectPhase(project_id=id, household_id=project.household_id, name=name, sort_order=next_order)
+        db.session.add(phase)
+        db.session.commit()
+        flash(f"Added phase '{name}'.", "success")
+    else:
+        flash('Phase name is required.', 'warning')
+    return redirect(url_for('project_detail', id=id))
+
 @app.route('/projects/<int:id>/reorder_tasks', methods=['POST'])
 def reorder_project_tasks(id):
     project = db.session.get(Project, id)
@@ -758,8 +859,14 @@ def reorder_project_tasks(id):
         return jsonify(success=False, message="Project not found"), 404
 
     order_data = request.json.get('order', [])
+    phase_id = request.json.get('phase_id')
     for data in order_data:
-        db.session.query(ActionItem).filter_by(id=int(data['id']), project_id=id).update({'sort_order': int(data['sort_order'])})
+        query = db.session.query(ActionItem).filter_by(id=int(data['id']), project_id=id)
+        if phase_id is not None:
+            query = query.filter_by(phase_id=int(phase_id))
+        else:
+            query = query.filter_by(phase_id=None)
+        query.update({'sort_order': int(data['sort_order'])})
     db.session.commit()
     return jsonify(success=True)
 
@@ -997,11 +1104,14 @@ def process_inbox(item_id):
 
     project_id = request.form.get('project_id')
     project_id = int(project_id) if project_id else None
+    phase_id = request.form.get('phase_id')
+    phase_id = int(phase_id) if phase_id else None
     status = request.form.get('status', 'icebox')
 
     sort_order = 0
     if project_id:
-        highest = ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
+        base_phase_id = phase_id or get_default_project_phase(project_id).id if get_default_project_phase(project_id) else None
+        highest = ActionItem.query.filter_by(project_id=project_id, phase_id=base_phase_id).order_by(ActionItem.sort_order.desc()).first() if base_phase_id else ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
         sort_order = (highest.sort_order + 1) if highest else 0
 
     action = ActionItem(
@@ -1015,6 +1125,7 @@ def process_inbox(item_id):
         complexity_fib=int(request.form.get('complexity_fib')),
         context=format_context(request.form.get('context')),
         project_id=int(project_id) if project_id else None,
+        phase_id=phase_id or (get_default_project_phase(project_id).id if project_id and get_default_project_phase(project_id) else None),
         status=status,
         owner_user_id=session['user_id'],
         due_date=due_date,
@@ -1059,10 +1170,13 @@ def add_action():
 
     project_id = request.form.get('project_id')
     project_id = int(project_id) if project_id else None
+    phase_id = request.form.get('phase_id')
+    phase_id = int(phase_id) if phase_id else None
 
     sort_order = 0
     if project_id:
-        highest = ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
+        effective_phase = phase_id or (get_default_project_phase(project_id).id if get_default_project_phase(project_id) else None)
+        highest = ActionItem.query.filter_by(project_id=project_id, phase_id=effective_phase).order_by(ActionItem.sort_order.desc()).first() if effective_phase else ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
         sort_order = (highest.sort_order + 1) if highest else 0
 
     action = ActionItem(
@@ -1076,6 +1190,7 @@ def add_action():
         energy_level=request.form.get('energy_level'),
         context=format_context(request.form.get('context')),
         project_id=project_id,
+        phase_id=phase_id or (get_default_project_phase(project_id).id if project_id and get_default_project_phase(project_id) else None),
         status=request.form.get('status', 'icebox'),
         owner_user_id=session.get('user_id'),
         due_date=due_date,
@@ -1100,6 +1215,8 @@ def add_action_bulk():
 
     project_id = request.form.get('project_id')
     project_id = int(project_id) if project_id else None
+    phase_id = request.form.get('phase_id')
+    phase_id = int(phase_id) if phase_id else None
     status = request.form.get('status', 'icebox')
     context = request.form.get('context')
     formatted_context = format_context(context)
@@ -1107,13 +1224,15 @@ def add_action_bulk():
     for item_title in items:
         sort_order = 0
         if project_id:
-            highest = ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
+            effective_phase = phase_id or (get_default_project_phase(project_id).id if get_default_project_phase(project_id) else None)
+            highest = ActionItem.query.filter_by(project_id=project_id, phase_id=effective_phase).order_by(ActionItem.sort_order.desc()).first() if effective_phase else ActionItem.query.filter_by(project_id=project_id).order_by(ActionItem.sort_order.desc()).first()
             sort_order = (highest.sort_order + 1) if highest else 0
 
         action = ActionItem(
             household_id=hid,
             title=item_title,
             project_id=project_id,
+            phase_id=phase_id or (get_default_project_phase(project_id).id if project_id and get_default_project_phase(project_id) else None),
             status=status,
             context=formatted_context,
             sort_order=sort_order,
@@ -1139,10 +1258,12 @@ def edit_action(id):
         action.status = request.form.get('status')
         project_id = request.form.get('project_id')
         action.project_id = int(project_id) if project_id else None
+        phase_id = request.form.get('phase_id')
+        action.phase_id = int(phase_id) if phase_id else (get_default_project_phase(action.project_id).id if action.project_id and get_default_project_phase(action.project_id) else None)
 
         # If project is being set or changed, update sort order
         if action.project_id:
-            highest = ActionItem.query.filter_by(project_id=action.project_id).order_by(ActionItem.sort_order.desc()).first()
+            highest = ActionItem.query.filter_by(project_id=action.project_id, phase_id=action.phase_id).order_by(ActionItem.sort_order.desc()).first() if action.phase_id else ActionItem.query.filter_by(project_id=action.project_id).order_by(ActionItem.sort_order.desc()).first()
             action.sort_order = (highest.sort_order + 1) if highest else 0
 
         action.is_recurring = 'is_recurring' in request.form
@@ -1274,11 +1395,14 @@ def icebox_view():
     # GET request
     icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox', is_deleted=False).order_by(ActionItem.project_id, ActionItem.sort_order).all()
 
-    # Group by project
+    # Group by project, but keep unassigned tasks newest-first so freshly added ones surface at the top.
     from itertools import groupby
     grouped_items = {}
-    for k, g in groupby(icebox_items, key=lambda item: item.project):
-        grouped_items[k] = list(g)
+    for project, items in groupby(icebox_items, key=lambda item: item.project):
+        ordered_items = list(items)
+        if project is None:
+            ordered_items.sort(key=lambda item: item.created_at or datetime.min, reverse=True)
+        grouped_items[project] = ordered_items
 
     return render_template('icebox.html', grouped_items=grouped_items)
 
@@ -2058,6 +2182,35 @@ def delete_expense(id):
         flash("Expense record deleted.", "success")
     return redirect(url_for('manage_expenses'))
 
+@app.route('/reports/contexts')
+def context_report():
+    hid = session.get('household_id')
+    active_tasks = ActionItem.query.filter(
+        ActionItem.household_id == hid,
+        ActionItem.is_deleted == False,
+        ActionItem.status.notin_(['done', 'archived']),
+        ActionItem.context.isnot(None)
+    ).order_by(ActionItem.context.asc(), ActionItem.title.asc()).all()
+
+    context_counts = {}
+    context_tasks = {}
+    for task in active_tasks:
+        context = task.context
+        context_counts[context] = context_counts.get(context, 0) + 1
+        context_tasks.setdefault(context, []).append(task)
+
+    context_breakdown = sorted(context_tasks.items(), key=lambda item: (-len(item[1]), item[0]))
+    context_labels = [context for context, _ in context_breakdown]
+    context_data = [len(tasks) for _, tasks in context_breakdown]
+
+    return render_template(
+        'context_report.html',
+        context_labels=context_labels,
+        context_data=context_data,
+        context_breakdown=context_breakdown
+    )
+
+
 @app.route('/reports/expenses')
 def expense_report():
     hid = session.get('household_id')
@@ -2185,6 +2338,21 @@ def switch_user():
 @app.route('/help')
 def help_view():
     return render_template('help.html')
+
+def get_default_project_phase(project_id):
+    if not project_id:
+        return None
+    project = db.session.get(Project, project_id)
+    if not project:
+        return None
+
+    phase = ProjectPhase.query.filter_by(project_id=project.id, is_deleted=False).order_by(ProjectPhase.sort_order.asc(), ProjectPhase.created_at.asc()).first()
+    if not phase:
+        phase = ProjectPhase(project_id=project.id, household_id=project.household_id, name='General', sort_order=0)
+        db.session.add(phase)
+        db.session.flush()
+    return phase
+
 
 def get_export_data():
     """Helper function to get all database data as a serializable dictionary."""

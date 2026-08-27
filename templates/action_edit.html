@@ -51,9 +51,21 @@
                         </select>
                     </div>
                     <div class="col-md-6 mb-3">
-                        <label for="context" class="form-label">Context</label>
-                        <input type="text" class="form-control" id="context" name="context" value="{{ action.context or '' }}">
+                        <label for="phase_id" class="form-label">Project Phase</label>
+                        <select class="form-select" id="phase_id" name="phase_id">
+                            <option value="">General / Unassigned</option>
+                            {% if action.project %}
+                                {% for phase in action.project.phases %}
+                                <option value="{{ phase.id }}" {% if action.phase_id == phase.id %}selected{% endif %}>{{ phase.name }}</option>
+                                {% endfor %}
+                            {% endif %}
+                        </select>
                     </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="context" class="form-label">Context</label>
+                    <input type="text" class="form-control" id="context" name="context" value="{{ action.context or '' }}">
                 </div>
 
                 <div class="row">

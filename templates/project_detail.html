@@ -74,38 +74,58 @@
     </div>
 
     <h3 class="mt-5 mb-3">Project Tasks</h3>
-    {% set active_tasks = project.actions | rejectattr('status', 'in', ['done', 'archived']) | list %}
-    {% set completed_tasks = project.actions | selectattr('status', 'in', ['done', 'archived']) | list %}
 
-    <div class="list-group" id="task-list-active">
-        {% for action in active_tasks %}
-            <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
-                <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none">{{ action.title }}</a></h5>
-                    <small class="text-muted"><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
-                </div>
-                <p class="mb-1 text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</p>
-                <span class="badge bg-secondary">{{ action.status|title }}</span>
-            </div>
-        {% else %}
-            <div class="list-group-item">No tasks associated with this project yet.</div>
-        {% endfor %}
-    </div>
+    <form action="{{ url_for('add_project_phase', id=project.id) }}" method="POST" class="card card-body mb-4">
+        <div class="input-group">
+            <input type="text" name="name" class="form-control" placeholder="Add a project phase (e.g. Planning, Demo, Finish)" required>
+            <button type="submit" class="btn btn-primary">Add Phase</button>
+        </div>
+    </form>
 
-    {% if completed_tasks %}
-    <h5 class="mt-4 mb-2 text-muted"><i class="bi bi-check2-circle"></i> Completed / Archived</h5>
-    <div class="list-group opacity-75" id="task-list-completed">
-        {% for action in completed_tasks %}
-            <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
-                <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none text-decoration-line-through">{{ action.title }}</a></h5>
-                    <small class="text-muted"><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
+    {% if not phase_groups %}
+        <div class="card card-body text-muted">No phases created yet. Add one above to organize the work.</div>
+    {% else %}
+        {% for group in phase_groups %}
+            {% set phase_name = group.phase.name if group.phase else group.name|default('Unassigned') %}
+            {% set phase_id = group.phase.id if group.phase else 'unassigned' %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">{{ phase_name }}</h5>
                 </div>
-                <p class="mb-1 text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</p>
-                <span class="badge bg-{{ 'success' if action.status == 'done' else 'secondary' }}">{{ action.status|title }}</span>
+                <div class="list-group list-group-flush" id="phase-list-{{ phase_id }}" data-phase-id="{{ phase_id }}">
+                    {% for action in group.active_tasks %}
+                        <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none">{{ action.title }}</a></h5>
+                                <small class="text-muted"><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
+                            </div>
+                            <p class="mb-1 text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</p>
+                            <span class="badge bg-secondary">{{ action.status|title }}</span>
+                        </div>
+                    {% else %}
+                        <div class="list-group-item text-muted">No active tasks in this phase.</div>
+                    {% endfor %}
+                </div>
+
+                {% if group.completed_tasks %}
+                <div class="card-body border-top">
+                    <h6 class="text-muted mb-2"><i class="bi bi-check2-circle"></i> Completed / Archived</h6>
+                    <div class="list-group opacity-75" id="phase-completed-{{ phase_id }}">
+                        {% for action in group.completed_tasks %}
+                            <div class="list-group-item list-group-item-action" data-id="{{ action.id }}">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h5 class="mb-1"><a href="{{ url_for('edit_action', id=action.id) }}" class="text-decoration-none text-decoration-line-through">{{ action.title }}</a></h5>
+                                    <small class="text-muted"><i class="bi bi-grip-vertical" style="cursor: grab;"></i></small>
+                                </div>
+                                <p class="mb-1 text-muted small">{{ action.description|truncate(150) if action.description else 'No description.' }}</p>
+                                <span class="badge bg-{{ 'success' if action.status == 'done' else 'secondary' }}">{{ action.status|title }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         {% endfor %}
-    </div>
     {% endif %}
 
     <h3 class="mt-5 mb-3">Associated Expenses</h3>
@@ -133,20 +153,22 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    function makeSortable(elId) {
-        var el = document.getElementById(elId);
-        if (!el) return;
+    document.querySelectorAll('[id^="phase-list-"]') .forEach(function (el) {
+        var phaseId = el.getAttribute('data-phase-id');
         Sortable.create(el, {
             animation: 150,
             handle: '.bi-grip-vertical',
-            onEnd: function (evt) {
+            onEnd: function () {
                 var items = el.children;
                 var order = [];
                 for (var i = 0; i < items.length; i++) {
-                    order.push({
-                        id: items[i].getAttribute('data-id'),
-                        sort_order: i
-                    });
+                    var item = items[i];
+                    if (item.getAttribute('data-id')) {
+                        order.push({
+                            id: item.getAttribute('data-id'),
+                            sort_order: i
+                        });
+                    }
                 }
 
                 fetch("{{ url_for('reorder_project_tasks', id=project.id) }}", {
@@ -154,14 +176,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ order: order })
+                    body: JSON.stringify({ order: order, phase_id: phaseId === 'unassigned' ? null : Number(phaseId) })
                 });
             }
         });
-    }
-
-    makeSortable('task-list-active');
-    makeSortable('task-list-completed');
+    });
 });
 </script>
 

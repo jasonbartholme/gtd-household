@@ -166,12 +166,23 @@
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label for="task-asset" class="form-label">Asset</label>
-                                        <select name="asset_id" id="task-asset" class="form-select">
-                                            <option value="">None</option>
-                                            {% for asset in all_assets %}<option value="{{ asset.id }}">{{ asset.name }}</option>{% endfor %}
+                                        <label for="task-phase" class="form-label">Phase</label>
+                                        <select name="phase_id" id="task-phase" class="form-select">
+                                            <option value="">General / Unassigned</option>
+                                            {% for proj in all_projects %}
+                                                {% for phase in proj.phases %}
+                                                    <option value="{{ phase.id }}" class="task-phase-option" data-project-id="{{ proj.id }}" hidden>{{ proj.name }}: {{ phase.name }}</option>
+                                                {% endfor %}
+                                            {% endfor %}
                                         </select>
                                     </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="task-asset" class="form-label">Asset</label>
+                                    <select name="asset_id" id="task-asset" class="form-select">
+                                        <option value="">None</option>
+                                        {% for asset in all_assets %}<option value="{{ asset.id }}">{{ asset.name }}</option>{% endfor %}
+                                    </select>
                                 </div>
                                 <div class="mb-3">
                                     <label for="task-description" class="form-label">Description / Notes</label>
@@ -238,18 +249,29 @@
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Add to Project</label>
-                                        <select name="project_id" class="form-select">
+                                        <select name="project_id" id="bulk-task-project" class="form-select">
                                             <option value="">None</option>
                                             {% for proj in all_projects %}<option value="{{ proj.id }}">{{ proj.name }}</option>{% endfor %}
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Set Status for All</label>
-                                        <select name="status" class="form-select">
-                                            <option value="icebox" selected>Icebox</option>
-                                            <option value="ready">Ready</option>
+                                        <label class="form-label">Phase</label>
+                                        <select name="phase_id" id="bulk-task-phase" class="form-select">
+                                            <option value="">General / Unassigned</option>
+                                            {% for proj in all_projects %}
+                                                {% for phase in proj.phases %}
+                                                    <option value="{{ phase.id }}" class="bulk-task-phase-option" data-project-id="{{ proj.id }}" hidden>{{ proj.name }}: {{ phase.name }}</option>
+                                                {% endfor %}
+                                            {% endfor %}
                                         </select>
                                     </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Set Status for All</label>
+                                    <select name="status" class="form-select">
+                                        <option value="icebox" selected>Icebox</option>
+                                        <option value="ready">Ready</option>
+                                    </select>
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Apply Context to All (Optional)</label>
@@ -303,6 +325,52 @@
                 bsAlert.close();
             }, {{ flash_dismiss_time }});
         });
+
+        function refreshPhaseSelect(projectSelectId, phaseSelectId) {
+            const projectSelect = document.getElementById(projectSelectId);
+            const phaseSelect = document.getElementById(phaseSelectId);
+            if (!projectSelect || !phaseSelect) return;
+
+            const selectedProjectId = projectSelect.value;
+            const options = phaseSelect.querySelectorAll('[data-project-id]');
+            let anyVisible = false;
+
+            options.forEach(function (option) {
+                const matchesProject = option.getAttribute('data-project-id') === selectedProjectId;
+                const shouldShow = !selectedProjectId || matchesProject;
+                option.hidden = !shouldShow;
+                option.disabled = !shouldShow;
+                if (shouldShow && !anyVisible) {
+                    anyVisible = true;
+                }
+            });
+
+            if (!selectedProjectId) {
+                phaseSelect.value = '';
+            } else if (phaseSelect.value && !phaseSelect.options[phaseSelect.selectedIndex].hidden) {
+                // keep current value if still valid for this project
+            } else {
+                phaseSelect.value = '';
+            }
+        }
+
+        const taskProjectSelect = document.getElementById('task-project');
+        const taskPhaseSelect = document.getElementById('task-phase');
+        if (taskProjectSelect && taskPhaseSelect) {
+            taskProjectSelect.addEventListener('change', function () {
+                refreshPhaseSelect('task-project', 'task-phase');
+            });
+            refreshPhaseSelect('task-project', 'task-phase');
+        }
+
+        const bulkTaskProjectSelect = document.getElementById('bulk-task-project');
+        const bulkTaskPhaseSelect = document.getElementById('bulk-task-phase');
+        if (bulkTaskProjectSelect && bulkTaskPhaseSelect) {
+            bulkTaskProjectSelect.addEventListener('change', function () {
+                refreshPhaseSelect('bulk-task-project', 'bulk-task-phase');
+            });
+            refreshPhaseSelect('bulk-task-project', 'bulk-task-phase');
+        }
 
         // Sidebar Toggle Logic
         const body = document.getElementById('app-body');
