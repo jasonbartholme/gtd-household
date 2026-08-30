@@ -115,6 +115,8 @@ class Project(db.Model):
     completed_at = db.Column(db.DateTime, nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
+    impact = db.Column(db.Float, nullable=True) # 0-100, subjective impact rating
+    effort = db.Column(db.Float, nullable=True) # 0-100, subjective effort rating
 
     actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
     phases = db.relationship('ProjectPhase', backref='project', lazy=True, order_by='ProjectPhase.sort_order')
@@ -185,6 +187,8 @@ class ActionItem(db.Model):
     base_points = db.Column(db.Integer, default=10)
     time_estimate = db.Column(db.Integer, nullable=True) # In minutes
     energy_level = db.Column(db.String(20), nullable=True) # e.g., Low, Medium, High
+    impact = db.Column(db.Float, nullable=True) # 0-100, subjective impact rating
+    effort = db.Column(db.Float, nullable=True) # 0-100, subjective effort rating
     owner_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
@@ -407,6 +411,7 @@ def inject_global_data():
         'inbox': 'Inbox',
         'today_done_view': 'Today\'s Done',
         'context_report': 'Context Report',
+        'impact_effort_report': 'Impact/Effort Matrix',
         'review': 'Review',
         'manage_projects': 'Projects',
         'manage_lists': 'Lists',
@@ -436,6 +441,7 @@ def inject_global_data():
             'today_done_view': 'Today\'s Done',
             'leaderboard': 'Leaderboard',
             'context_report': 'Context Report',
+            'impact_effort_report': 'Impact/Effort Matrix',
             'expense_report': 'Expense Report',
             'calendar_view': 'Calendar',
         },
@@ -574,6 +580,19 @@ def run_migrations():
         if 'sort_order' not in project_phase_columns:
             db.session.execute(text('ALTER TABLE project_phase ADD COLUMN sort_order INTEGER DEFAULT 0'))
 
+        # Migration 10: Add impact/effort matrix fields to action_item and project
+        # (must run before any ORM query against Project/ActionItem, since the model
+        # classes already declare these columns)
+        if 'impact' not in action_item_columns:
+            print("Adding 'impact' and 'effort' columns to 'action_item' table...")
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN impact FLOAT'))
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN effort FLOAT'))
+
+        if 'impact' not in project_columns:
+            print("Adding 'impact' and 'effort' columns to 'project' table...")
+            db.session.execute(text('ALTER TABLE project ADD COLUMN impact FLOAT'))
+            db.session.execute(text('ALTER TABLE project ADD COLUMN effort FLOAT'))
+
         for project in Project.query.all():
             if not ProjectPhase.query.filter_by(project_id=project.id, is_deleted=False).first():
                 db.session.add(ProjectPhase(project_id=project.id, household_id=project.household_id, name='General', sort_order=0))
@@ -663,6 +682,9 @@ def run_migrations():
             print("Adding 'estimated_cost' and 'due_date' columns to 'project' table...")
             db.session.execute(text('ALTER TABLE project ADD COLUMN estimated_cost FLOAT'))
             db.session.execute(text('ALTER TABLE project ADD COLUMN due_date DATETIME'))
+
+        # Migration 10: Add impact/effort matrix fields to action_item and project
+        # (moved earlier, before the Project.query.all() ORM query above)
 
         # Migration 6: Create the setting table if it doesn't exist
         if 'setting' not in all_tables:
@@ -885,6 +907,8 @@ def edit_project(id):
         project.estimated_cost = float(request.form.get('estimated_cost')) if request.form.get('estimated_cost') else None
         due_date_str = request.form.get('due_date')
         project.due_date = datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
+        project.impact = float(request.form.get('impact')) if request.form.get('impact') else None
+        project.effort = float(request.form.get('effort')) if request.form.get('effort') else None
 
         supply_ids = request.form.getlist('supplies')
         project.supplies = Supply.query.filter(Supply.id.in_(supply_ids)).all() if supply_ids else []
@@ -1252,7 +1276,8 @@ def edit_action(id):
         action.item_type = request.form.get('item_type')
         action.complexity_fib = int(request.form.get('complexity_fib'))
         action.time_estimate = int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None
-        action.energy_level = request.form.get('energy_level')
+        action.impact = float(request.form.get('impact')) if request.form.get('impact') else None
+        action.effort = float(request.form.get('effort')) if request.form.get('effort') else None
         action.context = format_context(request.form.get('context'))
         action.description = request.form.get('description')
         action.status = request.form.get('status')
@@ -2209,6 +2234,44 @@ def context_report():
         context_data=context_data,
         context_breakdown=context_breakdown
     )
+
+
+@app.route('/reports/impact-effort')
+def impact_effort_report():
+    hid = session.get('household_id')
+
+    tasks = ActionItem.query.filter(
+        ActionItem.household_id == hid,
+        ActionItem.is_deleted == False,
+        ActionItem.status.notin_(['done', 'archived']),
+        ActionItem.impact.isnot(None),
+        ActionItem.effort.isnot(None)
+    ).order_by(ActionItem.title.asc()).all()
+
+    projects = Project.query.filter(
+        Project.household_id == hid,
+        Project.is_deleted == False,
+        Project.status != 'completed',
+        Project.impact.isnot(None),
+        Project.effort.isnot(None)
+    ).order_by(Project.name.asc()).all()
+
+    def serialize_item(item, item_type):
+        return {
+            'id': item.id,
+            'title': item.title if item_type == 'task' else item.name,
+            'type': item_type,
+            'impact': item.impact,
+            'effort': item.effort,
+            'status': item.status,
+            'project_name': item.project.name if item_type == 'task' and item.project else None,
+            'description': (item.description or '')[:140],
+            'edit_url': url_for('edit_action', id=item.id) if item_type == 'task' else url_for('edit_project', id=item.id)
+        }
+
+    matrix_items = [serialize_item(t, 'task') for t in tasks] + [serialize_item(p, 'project') for p in projects]
+
+    return render_template('impact_effort_report.html', matrix_items=matrix_items)
 
 
 @app.route('/reports/expenses')

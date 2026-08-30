@@ -92,15 +92,32 @@
                         <label for="time_estimate" class="form-label">Time Estimate (minutes)</label>
                         <input type="number" class="form-control" id="time_estimate" name="time_estimate" value="{{ action.time_estimate or '' }}">
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="energy_level" class="form-label">Energy Level</label>
-                        <select class="form-select" id="energy_level" name="energy_level">
-                            <option value="" {% if not action.energy_level %}selected{% endif %}>None</option>
-                            <option value="Low" {% if action.energy_level == 'Low' %}selected{% endif %}>Low</option>
-                            <option value="Medium" {% if action.energy_level == 'Medium' %}selected{% endif %}>Medium</option>
-                            <option value="High" {% if action.energy_level == 'High' %}selected{% endif %}>High</option>
-                        </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label d-block">Impact / Effort Matrix</label>
+                    <div class="ie-matrix-wrapper">
+                        <div></div>
+                        <div class="ie-axis-label">High Impact</div>
+                        <div class="ie-axis-label" style="writing-mode: vertical-rl; transform: rotate(180deg);">Low Effort</div>
+                        <div class="ie-matrix" id="ieMatrix">
+                            <div class="ie-quadrant-labels">
+                                <span class="ie-q ie-q-tl">Quick Wins</span>
+                                <span class="ie-q ie-q-tr">Major Projects</span>
+                                <span class="ie-q ie-q-bl">Fill-ins</span>
+                                <span class="ie-q ie-q-br">Thankless Tasks</span>
+                            </div>
+                            <div class="ie-gridline-h"></div>
+                            <div class="ie-gridline-v"></div>
+                            <div class="ie-dot" id="ieDot"></div>
+                        </div>
+                        <div></div>
+                        <div class="ie-axis-label">Low Impact</div>
                     </div>
+                    <input type="hidden" name="impact" id="impact_input" value="{{ action.impact if action.impact is not none else '' }}">
+                    <input type="hidden" name="effort" id="effort_input" value="{{ action.effort if action.effort is not none else '' }}">
+                    <div class="form-text">Drag the dot to rate this task's impact vs. effort.</div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-1" id="ieClearBtn">Clear</button>
                 </div>
 
                 <div class="mb-3">
@@ -231,6 +248,14 @@ document.addEventListener('DOMContentLoaded', function () {
       imageEditModal.show();
     });
   });
+
+  initImpactEffortWidget(
+    document.getElementById('ieMatrix'),
+    document.getElementById('ieDot'),
+    document.getElementById('impact_input'),
+    document.getElementById('effort_input'),
+    document.getElementById('ieClearBtn')
+  );
 });
 </script>
 

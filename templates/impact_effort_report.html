@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Impact / Effort Matrix</h1>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                <div class="btn-group" role="group" aria-label="Filter by type">
+                    <input type="radio" class="btn-check" name="ieFilter" id="ieFilterBoth" value="both" checked>
+                    <label class="btn btn-outline-secondary btn-sm" for="ieFilterBoth">Both</label>
+
+                    <input type="radio" class="btn-check" name="ieFilter" id="ieFilterTasks" value="task">
+                    <label class="btn btn-outline-secondary btn-sm" for="ieFilterTasks">Tasks</label>
+
+                    <input type="radio" class="btn-check" name="ieFilter" id="ieFilterProjects" value="project">
+                    <label class="btn btn-outline-secondary btn-sm" for="ieFilterProjects">Projects</label>
+                </div>
+                <div class="small text-muted">
+                    <span class="d-inline-block rounded-circle me-1" style="width:10px;height:10px;background-color:#0dcaf0;"></span> Tasks
+                    <span class="d-inline-block rounded-circle ms-3 me-1" style="width:10px;height:10px;background-color:#fd7e14;"></span> Projects
+                </div>
+            </div>
+
+            {% if matrix_items %}
+            <div class="ie-matrix-wrapper" style="grid-template-columns: auto 1fr; width: 100%;">
+                <div></div>
+                <div class="ie-axis-label">Effort (low &rarr; high)</div>
+                <div class="ie-axis-label" style="writing-mode: vertical-rl; transform: rotate(180deg);">Impact (low &rarr; high)</div>
+                <div class="ie-matrix ie-matrix-large" id="ieReportMatrix" style="width: 100%;">
+                    <div class="ie-gridline-h"></div>
+                    <div class="ie-gridline-v"></div>
+                    <div class="ie-quadrant-labels">
+                        <span class="ie-q ie-q-tl">High Impact / Low Effort<br>Quick Wins</span>
+                        <span class="ie-q ie-q-tr">High Impact / High Effort<br>Major Projects</span>
+                        <span class="ie-q ie-q-bl">Low Impact / Low Effort<br>Fill-ins</span>
+                        <span class="ie-q ie-q-br">Low Impact / High Effort<br>Thankless Tasks</span>
+                    </div>
+                    {% for item in matrix_items %}
+                    <div class="ie-point ie-point-{{ item.type }}"
+                         data-type="{{ item.type }}"
+                         data-title="{{ item.title }}"
+                         data-status="{{ item.status }}"
+                         data-project-name="{{ item.project_name or '' }}"
+                         data-description="{{ item.description }}"
+                         data-edit-url="{{ item.edit_url }}"
+                         style="left: {{ item.effort }}%; top: {{ 100 - item.impact }}%;"
+                         title="{{ item.title }}"></div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="text-center text-muted py-5">
+                <h5 class="mb-2">No items to plot</h5>
+                <p class="mb-0">Set an Impact/Effort value on a task or project to see it here.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card ie-hover-card d-none" id="ieHoverCard">
+    <div class="card-body p-2">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+            <div>
+                <span class="badge bg-secondary mb-1" id="ieHoverType"></span>
+                <h6 class="mb-1" id="ieHoverTitle"></h6>
+                <div class="small text-muted" id="ieHoverProject"></div>
+                <p class="small mb-1" id="ieHoverDescription"></p>
+            </div>
+        </div>
+        <a href="#" class="btn btn-sm btn-outline-primary w-100 mt-1" id="ieHoverEditLink">Edit</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function() {
+        var matrixEl = document.getElementById('ieReportMatrix');
+        var hoverCard = document.getElementById('ieHoverCard');
+        if (!matrixEl || !hoverCard) return;
+
+        var points = Array.prototype.slice.call(matrixEl.querySelectorAll('.ie-point'));
+        var filterInputs = document.querySelectorAll('input[name="ieFilter"]');
+
+        function applyFilter() {
+            var selected = document.querySelector('input[name="ieFilter"]:checked');
+            var type = selected ? selected.value : 'both';
+            points.forEach(function(point) {
+                var show = type === 'both' || point.dataset.type === type;
+                point.classList.toggle('d-none', !show);
+            });
+        }
+
+        filterInputs.forEach(function(input) {
+            input.addEventListener('change', applyFilter);
+        });
+        applyFilter();
+
+        points.forEach(function(point) {
+            point.addEventListener('mouseenter', function() {
+                document.getElementById('ieHoverType').textContent = point.dataset.type === 'task' ? 'Task' : 'Project';
+                document.getElementById('ieHoverType').className = 'badge mb-1 ' + (point.dataset.type === 'task' ? 'bg-info' : 'bg-warning text-dark');
+                document.getElementById('ieHoverTitle').textContent = point.dataset.title;
+                document.getElementById('ieHoverProject').textContent = point.dataset.projectName || '';
+                document.getElementById('ieHoverDescription').textContent = point.dataset.description || '';
+                document.getElementById('ieHoverEditLink').href = point.dataset.editUrl;
+
+                var matrixRect = matrixEl.getBoundingClientRect();
+                var pointRect = point.getBoundingClientRect();
+                var left = pointRect.left - matrixRect.left + 16;
+                var top = pointRect.top - matrixRect.top;
+
+                if (left + 240 > matrixEl.clientWidth) {
+                    left = pointRect.left - matrixRect.left - 240 - 16;
+                }
+
+                hoverCard.style.left = left + 'px';
+                hoverCard.style.top = top + 'px';
+                hoverCard.style.position = 'absolute';
+                matrixEl.appendChild(hoverCard);
+                hoverCard.classList.remove('d-none');
+                hoverCard.style.pointerEvents = 'auto';
+            });
+
+            point.addEventListener('mouseleave', function() {
+                hoverCard.classList.add('d-none');
+            });
+        });
+
+        hoverCard.addEventListener('mouseenter', function() {
+            hoverCard.classList.remove('d-none');
+        });
+        hoverCard.addEventListener('mouseleave', function() {
+            hoverCard.classList.add('d-none');
+        });
+    })();
+</script>
+{% endblock %}

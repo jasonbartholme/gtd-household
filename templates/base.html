@@ -81,6 +81,101 @@
         #mobileNavOffcanvas {
             width: 260px;
         }
+
+        /* Impact / Effort matrix widget */
+        .ie-matrix-wrapper {
+            display: inline-grid;
+            grid-template-columns: auto auto;
+            grid-template-rows: auto auto;
+            gap: 4px;
+            align-items: center;
+            justify-items: center;
+        }
+        .ie-axis-label {
+            font-size: 0.75rem;
+            color: #adb5bd;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .ie-matrix {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            background-color: #2b3035;
+            border: 1px solid #495057;
+            border-radius: 6px;
+            cursor: crosshair;
+            user-select: none;
+            touch-action: none;
+        }
+        .ie-matrix.ie-matrix-large {
+            width: 100%;
+            height: 480px;
+        }
+        .ie-gridline-h {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            border-top: 1px dashed #495057;
+        }
+        .ie-gridline-v {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            border-left: 1px dashed #495057;
+        }
+        .ie-quadrant-labels {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+        .ie-q {
+            position: absolute;
+            font-size: 0.7rem;
+            color: #6c757d;
+            padding: 4px 6px;
+        }
+        .ie-q-tl { top: 0; left: 0; }
+        .ie-q-tr { top: 0; right: 0; text-align: right; }
+        .ie-q-bl { bottom: 0; left: 0; }
+        .ie-q-br { bottom: 0; right: 0; text-align: right; }
+        .ie-dot {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            margin-left: -10px;
+            margin-top: -10px;
+            border-radius: 50%;
+            background-color: #0d6efd;
+            border: 2px solid #fff;
+            cursor: grab;
+            box-shadow: 0 0 6px rgba(0,0,0,0.5);
+        }
+        .ie-dot:active {
+            cursor: grabbing;
+        }
+        .ie-dot.ie-dot-unset {
+            opacity: 0.4;
+        }
+        .ie-point {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            margin-left: -7px;
+            margin-top: -7px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+        .ie-point.ie-point-task { background-color: #0dcaf0; }
+        .ie-point.ie-point-project { background-color: #fd7e14; }
+        .ie-hover-card {
+            position: absolute;
+            z-index: 10;
+            width: 240px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body id="app-body">
@@ -430,6 +525,76 @@
                 confirmModal.hide();
             });
         })();
+
+        // Reusable draggable Impact / Effort matrix widget.
+        // Expects a container with class "ie-matrix", a child ".ie-dot", and
+        // hidden inputs for impact/effort values (0-100, impact high at top, effort high at right).
+        window.initImpactEffortWidget = function(matrixEl, dotEl, impactInput, effortInput, clearBtn) {
+            if (!matrixEl || !dotEl) return;
+
+            function setDotPosition(impact, effort) {
+                const left = (effort / 100) * matrixEl.clientWidth;
+                const top = ((100 - impact) / 100) * matrixEl.clientHeight;
+                dotEl.style.left = left + 'px';
+                dotEl.style.top = top + 'px';
+                dotEl.classList.remove('ie-dot-unset');
+            }
+
+            function centerDot() {
+                dotEl.style.left = '50%';
+                dotEl.style.top = '50%';
+                dotEl.classList.add('ie-dot-unset');
+            }
+
+            const initImpact = parseFloat(impactInput.value);
+            const initEffort = parseFloat(effortInput.value);
+            if (!isNaN(initImpact) && !isNaN(initEffort)) {
+                requestAnimationFrame(function() { setDotPosition(initImpact, initEffort); });
+            } else {
+                centerDot();
+            }
+
+            function updateFromEvent(clientX, clientY) {
+                const rect = matrixEl.getBoundingClientRect();
+                let x = clientX - rect.left;
+                let y = clientY - rect.top;
+                x = Math.max(0, Math.min(rect.width, x));
+                y = Math.max(0, Math.min(rect.height, y));
+                const effort = (x / rect.width) * 100;
+                const impact = 100 - (y / rect.height) * 100;
+                impactInput.value = impact.toFixed(1);
+                effortInput.value = effort.toFixed(1);
+                dotEl.style.left = x + 'px';
+                dotEl.style.top = y + 'px';
+                dotEl.classList.remove('ie-dot-unset');
+            }
+
+            let dragging = false;
+            dotEl.addEventListener('pointerdown', function(e) {
+                dragging = true;
+                dotEl.setPointerCapture(e.pointerId);
+            });
+            matrixEl.addEventListener('pointerdown', function(e) {
+                if (e.target === dotEl) return;
+                dragging = true;
+                updateFromEvent(e.clientX, e.clientY);
+            });
+            document.addEventListener('pointermove', function(e) {
+                if (!dragging) return;
+                updateFromEvent(e.clientX, e.clientY);
+            });
+            document.addEventListener('pointerup', function() {
+                dragging = false;
+            });
+
+            if (clearBtn) {
+                clearBtn.addEventListener('click', function() {
+                    impactInput.value = '';
+                    effortInput.value = '';
+                    centerDot();
+                });
+            }
+        };
     </script>
     {% block scripts %}{% endblock %}
 </body>
