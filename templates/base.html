@@ -81,101 +81,6 @@
         #mobileNavOffcanvas {
             width: 260px;
         }
-
-        /* Impact / Effort matrix widget */
-        .ie-matrix-wrapper {
-            display: inline-grid;
-            grid-template-columns: auto auto;
-            grid-template-rows: auto auto;
-            gap: 4px;
-            align-items: center;
-            justify-items: center;
-        }
-        .ie-axis-label {
-            font-size: 0.75rem;
-            color: #adb5bd;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-        }
-        .ie-matrix {
-            position: relative;
-            width: 220px;
-            height: 220px;
-            background-color: #2b3035;
-            border: 1px solid #495057;
-            border-radius: 6px;
-            cursor: crosshair;
-            user-select: none;
-            touch-action: none;
-        }
-        .ie-matrix.ie-matrix-large {
-            width: 100%;
-            height: 480px;
-        }
-        .ie-gridline-h {
-            position: absolute;
-            left: 0;
-            right: 0;
-            top: 50%;
-            border-top: 1px dashed #495057;
-        }
-        .ie-gridline-v {
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 50%;
-            border-left: 1px dashed #495057;
-        }
-        .ie-quadrant-labels {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-        }
-        .ie-q {
-            position: absolute;
-            font-size: 0.7rem;
-            color: #6c757d;
-            padding: 4px 6px;
-        }
-        .ie-q-tl { top: 0; left: 0; }
-        .ie-q-tr { top: 0; right: 0; text-align: right; }
-        .ie-q-bl { bottom: 0; left: 0; }
-        .ie-q-br { bottom: 0; right: 0; text-align: right; }
-        .ie-dot {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            margin-left: -10px;
-            margin-top: -10px;
-            border-radius: 50%;
-            background-color: #0d6efd;
-            border: 2px solid #fff;
-            cursor: grab;
-            box-shadow: 0 0 6px rgba(0,0,0,0.5);
-        }
-        .ie-dot:active {
-            cursor: grabbing;
-        }
-        .ie-dot.ie-dot-unset {
-            opacity: 0.4;
-        }
-        .ie-point {
-            position: absolute;
-            width: 14px;
-            height: 14px;
-            margin-left: -7px;
-            margin-top: -7px;
-            border-radius: 50%;
-            cursor: pointer;
-        }
-        .ie-point.ie-point-task { background-color: #0dcaf0; }
-        .ie-point.ie-point-project { background-color: #fd7e14; }
-        .ie-hover-card {
-            position: absolute;
-            z-index: 10;
-            width: 240px;
-            pointer-events: none;
-        }
     </style>
 </head>
 <body id="app-body">
@@ -402,7 +307,12 @@
         </div>
       </div>
     </div>
-
+    <footer class="site-footer">
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfjcQbiOLTuIeLgACYmndO1qGAWPEjEwq6ad3VNg2qABFiZog/viewform?usp=publish-editor" aria-label="Submit bug or feedback">
+            <i class="bi bi-chat-dots"></i>
+            <span>Bug / Feedback</span>
+        </a>
+    </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script>
