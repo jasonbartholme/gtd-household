@@ -9,9 +9,9 @@
     <div class="card mb-4">
         <div class="card-body">
             {% if context_labels %}
-            <div class="row align-items-center">
+            <div class="row align-items-start">
                 <div class="col-lg-7">
-                    <canvas id="contextChart" height="240"></canvas>
+                    <canvas id="contextChart" height="400" style="max-height: 450px; width: 100%;"></canvas>
                 </div>
                 <div class="col-lg-5">
                     <div class="list-group list-group-flush">
@@ -53,7 +53,7 @@
                             <div class="border rounded p-2 h-100">
                                 <div class="d-flex justify-content-between align-items-start gap-2">
                                     <div>
-                                        <strong>{{ task.title }}</strong>
+                                        <strong><a href="{{ url_for('edit_action', id=task.id) }}" class="text-decoration-none">{{ task.title }}</a></strong>
                                         {% if task.project %}
                                         <div class="small text-muted">{{ task.project.name }}</div>
                                         {% endif %}
