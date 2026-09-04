@@ -63,6 +63,13 @@
                     </div>
                 </div>
 
+                {% if action.project %}
+                <div class="mb-3">
+                    <label for="project_notes" class="form-label">Project Notes</label>
+                    <textarea class="form-control" id="project_notes" name="project_notes" rows="6">{{ action.project.notes }}</textarea>
+                </div>
+                {% endif %}
+
                 <div class="mb-3">
                     <label for="context" class="form-label">Context</label>
                     <input type="text" class="form-control" id="context" name="context" value="{{ action.context or '' }}">

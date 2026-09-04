@@ -108,6 +108,7 @@ class Project(db.Model):
     asset_id = db.Column(db.Integer, db.ForeignKey('asset.id'), nullable=True)
     name = db.Column(db.String(200), nullable=False)
     description = db.Column(db.Text, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(50), default='active') # active, completed
     estimated_cost = db.Column(db.Float, nullable=True)
     due_date = db.Column(db.DateTime, nullable=True)
@@ -593,6 +594,10 @@ def run_migrations():
             db.session.execute(text('ALTER TABLE project ADD COLUMN impact FLOAT'))
             db.session.execute(text('ALTER TABLE project ADD COLUMN effort FLOAT'))
 
+        if 'notes' not in project_columns:
+            print("Adding 'notes' column to 'project' table...")
+            db.session.execute(text('ALTER TABLE project ADD COLUMN notes TEXT'))
+
         for project in Project.query.all():
             if not ProjectPhase.query.filter_by(project_id=project.id, is_deleted=False).first():
                 db.session.add(ProjectPhase(project_id=project.id, household_id=project.household_id, name='General', sort_order=0))
@@ -788,6 +793,7 @@ def add_project():
         household_id=session.get('household_id'),
         name=request.form.get('name'),
         description=request.form.get('description'),
+        notes=request.form.get('notes'),
         asset_id=int(request.form.get('asset_id')) if request.form.get('asset_id') else None,
         estimated_cost=float(request.form.get('estimated_cost')) if request.form.get('estimated_cost') else None,
         due_date=datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
@@ -902,6 +908,7 @@ def edit_project(id):
     if request.method == 'POST':
         project.name = request.form.get('name')
         project.description = request.form.get('description')
+        project.notes = request.form.get('notes')
         project.asset_id = int(request.form.get('asset_id')) if request.form.get('asset_id') else None
 
         project.estimated_cost = float(request.form.get('estimated_cost')) if request.form.get('estimated_cost') else None
@@ -1281,8 +1288,14 @@ def edit_action(id):
         action.context = format_context(request.form.get('context'))
         action.description = request.form.get('description')
         action.status = request.form.get('status')
+        if action.status == 'done' and action.completed_at is None:
+            action.completed_at = get_local_now()
+            action.owner_user_id = session.get('user_id')
+            log_activity(session.get('user_id'), 'completed_task', f"Finished: {action.title}")
         project_id = request.form.get('project_id')
         action.project_id = int(project_id) if project_id else None
+        if action.project_id and 'project_notes' in request.form:
+            action.project.notes = request.form.get('project_notes')
         phase_id = request.form.get('phase_id')
         action.phase_id = int(phase_id) if phase_id else (get_default_project_phase(action.project_id).id if action.project_id and get_default_project_phase(action.project_id) else None)
 
