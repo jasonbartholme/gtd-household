@@ -1,0 +1,8 @@
+{% if show_feature_descriptions and page_intro %}
+<section class="card border-info mb-4" aria-labelledby="page-intro-title">
+    <div class="card-body py-3">
+        <h2 class="h6 text-info mb-1" id="page-intro-title">{{ page_intro[0] }}</h2>
+        <p class="mb-0 text-muted">{{ page_intro[1] }}</p>
+    </div>
+</section>
+{% endif %}

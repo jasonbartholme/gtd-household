@@ -4,6 +4,7 @@
         <h2 class="h4 mb-0 text-info fw-bold" data-bs-toggle="tooltip" title="GTD Rule: Any outcome that requires more than one step is a Project. Keep them here, and put their next physical action on the Kanban board!" style="cursor: help;">Active Projects ℹ️</h2>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addProjectModal">+ New Project</button>
     </div>
+    {% include '_page_intro.html' %}
     <div class="row g-3">
         {% for data in projects_data %}
         {% set proj = data.project %}

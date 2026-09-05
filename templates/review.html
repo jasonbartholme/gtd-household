@@ -8,6 +8,7 @@
             </div>
             <a href="{{ url_for('kanban') }}" class="btn btn-sm btn-outline-secondary">Open Board</a>
         </div>
+        {% include '_page_intro.html' %}
 
         {% macro task_row(task, label=None) %}
         <div class="list-group-item bg-dark text-light border-secondary">

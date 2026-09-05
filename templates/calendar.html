@@ -11,6 +11,7 @@
             <a href="{{ url_for('calendar_view', year=year, month=month, view_type='list') }}" class="btn btn-outline-primary {% if view_type == 'list' %}active{% endif %}">List View</a>
         </div>
     </div>
+    {% include '_page_intro.html' %}
 
     <div class="d-flex justify-content-between mb-3">
         <a href="{{ url_for('calendar_view', year=prev_year, month=prev_month, view_type=view_type) }}" class="btn btn-secondary">&laquo; Previous Month</a>

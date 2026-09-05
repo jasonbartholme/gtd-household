@@ -7,6 +7,7 @@
         </div>
         <a href="{{ url_for('inbox') }}" class="btn btn-secondary btn-sm">+ Add Idea</a>
     </div>
+    {% include '_page_intro.html' %}
 
     <div class="row g-3">
         {% for item in items %}

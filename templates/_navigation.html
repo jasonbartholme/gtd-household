@@ -23,14 +23,7 @@
             <li class="nav-item">
                 <a href="{{ url_for(endpoint) }}" class="nav-link {% if request.endpoint == endpoint %}active{% endif %}">
                     <i class="bi {{ icons.get(endpoint, 'bi-question-circle') }} me-2"></i>
-                    {% if endpoint == 'inbox' and unproc_inbox > 0 %}
-                        <span class="d-flex justify-content-between align-items-center">
-                            <span class="nav-text">{{ title }}</span>
-                            <span class="badge bg-danger rounded-pill">{{ unproc_inbox }}</span>
-                        </span>
-                    {% else %}
-                        <span class="nav-text">{{ title }}</span>
-                    {% endif %}
+                    <span class="nav-text">{{ title }}</span>
                 </a>
             </li>
         {% endfor %}

@@ -3,6 +3,7 @@
 {% block content %}
 <div class="container mt-4">
     <h1 class="mb-4">{{ page_title }}</h1>
+    {% include '_page_intro.html' %}
 
     <div class="row g-4">
         <div class="col-lg-4 col-md-6">
@@ -95,6 +96,15 @@
             <div class="card h-100">
                 <div class="card-header">UI Customization</div>
                 <div class="card-body">
+                    <form action="{{ url_for('settings_view') }}" method="POST" class="mb-4">
+                        <input type="hidden" name="form_name" value="feature_descriptions">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="show_feature_descriptions" name="show_feature_descriptions" {% if show_feature_descriptions %}checked{% endif %}>
+                            <label class="form-check-label" for="show_feature_descriptions">Show new-user feature descriptions</label>
+                        </div>
+                        <button type="submit" class="btn btn-outline-primary btn-sm w-100 mt-3">Save Display Preference</button>
+                    </form>
+                    <hr>
                     <form action="{{ url_for('settings_view') }}" method="POST">
                         <input type="hidden" name="form_name" value="ui_settings">
                         <div class="mb-3">

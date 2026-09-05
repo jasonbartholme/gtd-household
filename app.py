@@ -418,6 +418,8 @@ def inject_global_data():
     # Get UI settings
     flash_dismiss_time_setting = db.session.get(Setting, 'flash_dismiss_time')
     flash_dismiss_time = int(flash_dismiss_time_setting.value) if flash_dismiss_time_setting else 2000
+    feature_descriptions_setting = db.session.get(Setting, 'show_feature_descriptions')
+    show_feature_descriptions = feature_descriptions_setting.value == 'true' if feature_descriptions_setting else True
     task_defaults = get_task_defaults(hid)
 
     all_projects = Project.query.filter_by(household_id=hid, status='active', is_deleted=False).order_by(Project.name).all() if hid else []
@@ -451,11 +453,34 @@ def inject_global_data():
         'settings_view': 'Settings'
     }
     page_title = endpoints.get(request.endpoint, '')
+    page_introductions = {
+        'dashboard': ('Your Dashboard', 'Use this snapshot to see recent progress and keep your trusted system current.'),
+        'kanban': ('Choose the Next Action', 'The board holds work you have decided is actionable. Pull one clear next action at a time and keep the rest visible without holding it in your head.'),
+        'inbox': ('Capture First', 'Put every incoming thought here quickly. In GTD, capture comes before deciding what the item means or what to do with it.'),
+        'review': ('Reflect and Re-engage', 'Use the review to identify stale, blocked, overdue, and unassigned work so every commitment has a clear next action.'),
+        'icebox_view': ('Clarify Before You Commit', 'These items have been considered but are not active yet. Move only the work you are ready to make actionable onto the board.'),
+        'someday_view': ('Keep Possibilities Without Pressure', 'Store ideas you may want to pursue later. Review them regularly, but keep them out of your active commitments until the time is right.'),
+        'manage_projects': ('Track Desired Outcomes', 'A project is any outcome that needs more than one action. Keep its next physical action on the board so the project keeps moving.'),
+        'manage_lists': ('Organize Reference and Checklists', 'Use lists for reusable information and collections that do not need to compete with your next actions.'),
+        'manage_expenses': ('Record Household Spending', 'Capture expenses with their related project so planning reflects the full cost of your commitments.'),
+        'assets': ('Maintain What You Own', 'Keep useful details about household assets here, then turn maintenance needs into clear next actions when they arise.'),
+        'supplies': ('Keep Supplies Reliable', 'Track consumables and reorder points so routine needs become visible before they turn into interruptions.'),
+        'calendar_view': ('Honor the Hard Landscape', 'Use the calendar for date-specific commitments. Keep flexible work on the board, where you can choose it in context.'),
+        'context_report': ('Work by Context', 'GTD contexts group actions by where, when, or how you can do them, making it easier to choose useful work in the moment.'),
+        'impact_effort_report': ('See the Tradeoffs', 'Compare the expected impact and effort of active work to help choose the next action deliberately.'),
+        'expense_report': ('Review Spending Patterns', 'Regular review turns captured expense data into better household decisions.'),
+        'today_done_view': ('Notice Completed Work', 'Reviewing completions builds trust in your system and gives today a clear stopping point.'),
+        'archive_view': ('Keep a Record', 'Completed work is archived so your active lists stay focused while past outcomes remain available for reference.'),
+        'settings_view': ('Tune Your Trusted System', 'Set defaults and display preferences that make capturing and clarifying new tasks fast and consistent.'),
+        'manage_users': ('Share Commitments Clearly', 'Keep household members visible so ownership and capacity are clear when you organize next actions.'),
+        'help_view': ('Learn the Workflow', 'Use these guides to build the capture, clarify, organize, reflect, and engage habits at the heart of GTD.')
+    }
+    page_intro = page_introductions.get(request.endpoint)
 
     nav_links = {
         'Core': {
             'kanban': 'Board',
-            'inbox': 'Inbox',
+            'inbox': 'My Tasks',
             'review': 'Review',
             'icebox_view': 'Icebox',
         },
@@ -493,7 +518,9 @@ def inject_global_data():
         page_title=page_title,
         nav_links=nav_links,
         flash_dismiss_time=flash_dismiss_time,
-        task_defaults=task_defaults
+        task_defaults=task_defaults,
+        show_feature_descriptions=show_feature_descriptions,
+        page_intro=page_intro
     )
 first_run = True
 
@@ -1129,8 +1156,22 @@ def edit_image(id):
 @app.route('/inbox')
 def inbox():
     hid = session.get('household_id')
-    items = InboxItem.query.filter_by(household_id=hid, processed_at=None).order_by(InboxItem.created_at.desc()).all()
-    return render_template('inbox.html', inbox_items=items)
+    user_id = session.get('user_id')
+    assigned_tasks = ActionItem.query.filter(
+        ActionItem.household_id == hid,
+        ActionItem.is_deleted == False,
+        ActionItem.status.notin_(['done', 'archived']),
+        db.or_(
+            ActionItem.owner_user_id == user_id,
+            ActionItem.collaborators.any(User.id == user_id)
+        )
+    ).order_by(
+        db.case((ActionItem.owner_user_id != user_id, 0), else_=1),
+        ActionItem.due_date.is_(None),
+        ActionItem.due_date.asc(),
+        ActionItem.created_at.desc()
+    ).all()
+    return render_template('inbox.html', assigned_tasks=assigned_tasks)
 
 @app.route('/inbox/add', methods=['POST'])
 def add_inbox():
@@ -1535,6 +1576,13 @@ def settings_view():
             db.session.add(setting)
             db.session.commit()
             flash('UI settings updated.', 'success')
+            return redirect(url_for('settings_view'))
+        if form_name == 'feature_descriptions':
+            setting = db.session.get(Setting, 'show_feature_descriptions') or Setting(key='show_feature_descriptions')
+            setting.value = 'true' if 'show_feature_descriptions' in request.form else 'false'
+            db.session.add(setting)
+            db.session.commit()
+            flash('Feature descriptions updated.', 'success')
             return redirect(url_for('settings_view'))
         if form_name == 'task_defaults':
             household = db.session.get(Household, hid)
