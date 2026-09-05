@@ -404,6 +404,22 @@ def humanize_time(dt, past_tense='{} ago', future_tense='in {}'):
     if seconds >= 60: return tense.format(plural(seconds // 60, "minute"))
     return "just now"
 
+def relative_due_date(dt):
+    """Returns a relative label for a task's calendar due date."""
+    if not dt:
+        return ""
+    due_date = dt.date() if isinstance(dt, datetime) else dt
+    days_until_due = (due_date - get_local_now().date()).days
+    if days_until_due == 0:
+        return "today"
+    if days_until_due == 1:
+        return "tomorrow"
+    if days_until_due == -1:
+        return "yesterday"
+    if days_until_due > 1:
+        return f"in {days_until_due} days"
+    return f"{abs(days_until_due)} days ago"
+
 # ==========================================
 # 4. UTILS & MIDDLEWARE
 # ==========================================
@@ -437,6 +453,7 @@ def inject_global_data():
         'context_report': 'Context Report',
         'impact_effort_report': 'Impact/Effort Matrix',
         'review': 'Review',
+        'icebox_view': 'Icebox',
         'manage_projects': 'Projects',
         'manage_lists': 'Lists',
         'someday_view': 'Someday/Maybe',
@@ -776,6 +793,7 @@ def run_migrations():
 # 5. JINJA FILTERS
 # ==========================================
 app.jinja_env.filters['humanize'] = humanize_time
+app.jinja_env.filters['relative_due_date'] = relative_due_date
 # 5. ROUTES
 # ==========================================
 
