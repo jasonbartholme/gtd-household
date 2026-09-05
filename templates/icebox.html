@@ -41,7 +41,9 @@
                     <label class="list-group-item d-flex align-items-center">
                         <input class="form-check-input me-3" type="checkbox" name="task_ids" value="{{ item.id }}">
                         <div>
-                            <div class="fw-bold">{{ item.title }}</div>
+                            <div class="fw-bold">
+                                {{ item.title }}{% if item.context %}<span class="text-warning ms-1">{{ item.context }}</span>{% endif %}
+                            </div>
                             {% if item.description %}
                             <small class="text-muted">{{ item.description|truncate(100) }}</small>
                             {% endif %}
