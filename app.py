@@ -92,10 +92,10 @@ BUILD_TIMESTAMP = datetime.fromtimestamp(
 
 def get_task_defaults(household_id):
     household = db.session.get(Household, household_id) if household_id else None
-    context = household.default_task_context if household else 'General'
-    time_estimate = household.default_task_time_estimate if household else 15
-    due_days = household.default_task_due_days if household else 14
-    energy_level = household.default_task_energy_level if household else 'Low'
+    context = household.default_task_context if household and household.default_task_context else 'General'
+    time_estimate = household.default_task_time_estimate if household and household.default_task_time_estimate is not None else 15
+    due_days = household.default_task_due_days if household and household.default_task_due_days is not None else 14
+    energy_level = household.default_task_energy_level if household and household.default_task_energy_level else 'Low'
     due_date = (get_local_now() + timedelta(days=due_days)).date()
 
     return {
@@ -642,6 +642,11 @@ def run_migrations():
             db.session.execute(text('ALTER TABLE household ADD COLUMN default_task_due_days INTEGER DEFAULT 14'))
         if 'default_task_energy_level' not in household_columns:
             db.session.execute(text("ALTER TABLE household ADD COLUMN default_task_energy_level VARCHAR(20) DEFAULT 'Low'"))
+
+        db.session.execute(text("UPDATE household SET default_task_context = 'General' WHERE default_task_context IS NULL"))
+        db.session.execute(text('UPDATE household SET default_task_time_estimate = 15 WHERE default_task_time_estimate IS NULL'))
+        db.session.execute(text('UPDATE household SET default_task_due_days = 14 WHERE default_task_due_days IS NULL'))
+        db.session.execute(text("UPDATE household SET default_task_energy_level = 'Low' WHERE default_task_energy_level IS NULL"))
 
         if 'project_phase' not in all_tables:
             print("Creating 'project_phase' table...")
