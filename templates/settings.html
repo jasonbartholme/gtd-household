@@ -62,15 +62,32 @@
 
         <div class="col-lg-4 col-md-6">
             <div class="card h-100">
-                <div class="card-header">Future Settings</div>
+                <div class="card-header">Default Task Values</div>
                 <div class="card-body">
-                    <p class="text-muted small">This area can be expanded with more application-wide settings.</p>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item bg-transparent">Default Task Status</li>
-                        <li class="list-group-item bg-transparent">Notification Preferences</li>
-                        <li class="list-group-item bg-transparent">Theme Selection</li>
-                        <li class="list-group-item bg-transparent">API & Integrations</li>
-                    </ul>
+                    <form action="{{ url_for('settings_view') }}" method="POST">
+                        <input type="hidden" name="form_name" value="task_defaults">
+                        <div class="mb-3">
+                            <label for="default_task_context" class="form-label">Context</label>
+                            <input type="text" class="form-control" id="default_task_context" name="default_task_context" value="{{ task_defaults.context }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="default_task_time_estimate" class="form-label">Time Estimate (minutes)</label>
+                            <input type="number" min="0" class="form-control" id="default_task_time_estimate" name="default_task_time_estimate" value="{{ task_defaults.time_estimate }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="default_task_due_days" class="form-label">Due In (days)</label>
+                            <input type="number" min="0" class="form-control" id="default_task_due_days" name="default_task_due_days" value="{{ task_defaults.due_days }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="default_task_energy_level" class="form-label">Energy</label>
+                            <select class="form-select" id="default_task_energy_level" name="default_task_energy_level">
+                                <option value="Low" {% if task_defaults.energy_level == 'Low' %}selected{% endif %}>Low</option>
+                                <option value="Medium" {% if task_defaults.energy_level == 'Medium' %}selected{% endif %}>Medium</option>
+                                <option value="High" {% if task_defaults.energy_level == 'High' %}selected{% endif %}>High</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">Save Task Defaults</button>
+                    </form>
                 </div>
             </div>
         </div>

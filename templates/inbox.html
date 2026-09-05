@@ -137,23 +137,27 @@
                     </div>
                      <div class="mb-3">
                         <label class="form-label">Context</label>
-                        <input type="text" name="context" class="form-control" value="{{ item.context or '' }}">
+                        <input type="text" name="context" class="form-control" value="{{ item.context or task_defaults.context }}">
                     </div>
                 </div>
                 <div class="row">
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Time Estimate (minutes)</label>
-                        <input type="number" name="time_estimate" class="form-control">
+                        <input type="number" name="time_estimate" class="form-control" value="{{ task_defaults.time_estimate }}">
                     </div>
                     <div class="col-md-6 mb-3">
                         <label class="form-label">Energy Level</label>
                         <select name="energy_level" class="form-select">
                             <option value="">None</option>
-                            <option value="Low">Low</option>
-                            <option value="Medium">Medium</option>
-                            <option value="High">High</option>
+                            <option value="Low" {% if task_defaults.energy_level == 'Low' %}selected{% endif %}>Low</option>
+                            <option value="Medium" {% if task_defaults.energy_level == 'Medium' %}selected{% endif %}>Medium</option>
+                            <option value="High" {% if task_defaults.energy_level == 'High' %}selected{% endif %}>High</option>
                         </select>
                     </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Due Date</label>
+                    <input type="date" name="due_date" class="form-control" value="{{ task_defaults.due_date }}">
                 </div>
                 <div class="modal-footer">
                     <button type="submit" name="submit_action" value="save_close" class="btn btn-secondary">Save & Close</button>

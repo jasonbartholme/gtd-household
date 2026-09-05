@@ -32,7 +32,9 @@
                             <h6 class="mb-1">{{ item.title }}</h6>
                             <i class="bi bi-grip-vertical fs-4" style="cursor: grab;"></i>
                         </div>
-                        <p class="mb-1 small text-muted card-details">{{ item.description|truncate(100) if item.description else 'No description' }}</p>
+                        {% if item.description %}
+                        <p class="mb-1 small text-muted card-details">{{ item.description|truncate(100) }}</p>
+                        {% endif %}
                         {% if item.project %}
                         <small class="d-block text-muted card-details">
                             <i class="bi bi-folder"></i> <a href="{{ url_for('project_detail', id=item.project.id) }}" class="text-decoration-none">{{ item.project.name }}</a>

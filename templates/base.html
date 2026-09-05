@@ -41,6 +41,13 @@
             border-color: #86b7fe;
             box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
         }
+        .site-footer {
+            padding: 1.5rem 0;
+        }
+        .site-footer hr {
+            border-color: #495057;
+            margin: 0 0 1.5rem;
+        }
 
         /* Sidebar Styles */
         .sidebar {
@@ -160,6 +167,11 @@
             .ie-matrix { min-height: 15rem; }
             .ie-q { font-size: 0.6875rem; padding: 0.35rem; }
         }
+
+    .site-footer {
+        text-align: center;
+        padding-bottom: 2rem;
+    }
     </style>
 </head>
 <body id="app-body">
@@ -278,25 +290,25 @@
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label for="task-context" class="form-label">Context</label>
-                                        <input type="text" name="context" id="task-context" class="form-control" placeholder="@home, @work, etc.">
+                                        <input type="text" name="context" id="task-context" class="form-control" value="{{ task_defaults.context }}">
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label for="task-due-date" class="form-label">Due Date</label>
-                                        <input type="date" name="due_date" id="task-due-date" class="form-control">
+                                        <input type="date" name="due_date" id="task-due-date" class="form-control" value="{{ task_defaults.due_date }}">
                                     </div>
                                 </div>
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="task-time-estimate" class="form-label">Time Estimate (minutes)</label>
-                                <input type="number" name="time_estimate" id="task-time-estimate" class="form-control">
+                                <input type="number" name="time_estimate" id="task-time-estimate" class="form-control" value="{{ task_defaults.time_estimate }}">
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label for="task-energy-level" class="form-label">Energy Level</label>
                                 <select name="energy_level" id="task-energy-level" class="form-select">
                                     <option value="">None</option>
-                                    <option value="Low">Low</option>
-                                    <option value="Medium">Medium</option>
-                                    <option value="High">High</option>
+                                    <option value="Low" {% if task_defaults.energy_level == 'Low' %}selected{% endif %}>Low</option>
+                                    <option value="Medium" {% if task_defaults.energy_level == 'Medium' %}selected{% endif %}>Medium</option>
+                                    <option value="High" {% if task_defaults.energy_level == 'High' %}selected{% endif %}>High</option>
                                 </select>
                             </div>
                         </div>
@@ -387,10 +399,13 @@
       </div>
     </div>
     <footer class="site-footer">
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSfjcQbiOLTuIeLgACYmndO1qGAWPEjEwq6ad3VNg2qABFiZog/viewform?usp=publish-editor" aria-label="Submit bug or feedback">
+        <hr>
+        <div class="text-center">
+            <a href="https://docs.google.com/forms/d/e/1FAIpQLSfjcQbiOLTuIeLgACYmndO1qGAWPEjEwq6ad3VNg2qABFiZog/viewform?usp=publish-editor" aria-label="Submit bug or feedback">
             <i class="bi bi-chat-dots"></i>
             <span>Bug / Feedback</span>
         </a>
+        </div>
     </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>

@@ -86,6 +86,22 @@ def get_local_now():
     """Returns current time in Central Time (US/Chicago) as a naive datetime for SQLite."""
     return datetime.now(ZoneInfo("America/Chicago")).replace(tzinfo=None)
 
+def get_task_defaults(household_id):
+    household = db.session.get(Household, household_id) if household_id else None
+    context = household.default_task_context if household else 'General'
+    time_estimate = household.default_task_time_estimate if household else 15
+    due_days = household.default_task_due_days if household else 14
+    energy_level = household.default_task_energy_level if household else 'Low'
+    due_date = (get_local_now() + timedelta(days=due_days)).date()
+
+    return {
+        'context': context,
+        'time_estimate': time_estimate,
+        'due_days': due_days,
+        'energy_level': energy_level,
+        'due_date': due_date.isoformat()
+    }
+
 # ==========================================
 # 2. DATABASE MODELS
 # ==========================================
@@ -93,6 +109,10 @@ class Household(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
+    default_task_context = db.Column(db.String(100), default='General')
+    default_task_time_estimate = db.Column(db.Integer, default=15)
+    default_task_due_days = db.Column(db.Integer, default=14)
+    default_task_energy_level = db.Column(db.String(20), default='Low')
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -398,6 +418,7 @@ def inject_global_data():
     # Get UI settings
     flash_dismiss_time_setting = db.session.get(Setting, 'flash_dismiss_time')
     flash_dismiss_time = int(flash_dismiss_time_setting.value) if flash_dismiss_time_setting else 2000
+    task_defaults = get_task_defaults(hid)
 
     all_projects = Project.query.filter_by(household_id=hid, status='active', is_deleted=False).order_by(Project.name).all() if hid else []
 
@@ -471,13 +492,15 @@ def inject_global_data():
         unproc_inbox=unproc_inbox,
         page_title=page_title,
         nav_links=nav_links,
-        flash_dismiss_time=flash_dismiss_time
+        flash_dismiss_time=flash_dismiss_time,
+        task_defaults=task_defaults
     )
 first_run = True
 
 def setup_db():
     # Ensure the database tables exist and seed minimal data once per process
     db.create_all()
+    run_migrations()
     if not Household.query.first():
         h = Household(name="Local Household")
         db.session.add(h)
@@ -548,6 +571,7 @@ def run_migrations():
 
     inspector = inspect(db.engine)
     action_item_columns = [c['name'] for c in inspector.get_columns('action_item')]
+    household_columns = [c['name'] for c in inspector.get_columns('household')]
     project_columns = [c['name'] for c in inspector.get_columns('project')]
     expense_columns = [c['name'] for c in inspector.get_columns('expense')]
     asset_columns = [c['name'] for c in inspector.get_columns('asset')]
@@ -558,6 +582,15 @@ def run_migrations():
 
     db.session.rollback()
     with db.session.begin():
+        if 'default_task_context' not in household_columns:
+            db.session.execute(text("ALTER TABLE household ADD COLUMN default_task_context VARCHAR(100) DEFAULT 'General'"))
+        if 'default_task_time_estimate' not in household_columns:
+            db.session.execute(text('ALTER TABLE household ADD COLUMN default_task_time_estimate INTEGER DEFAULT 15'))
+        if 'default_task_due_days' not in household_columns:
+            db.session.execute(text('ALTER TABLE household ADD COLUMN default_task_due_days INTEGER DEFAULT 14'))
+        if 'default_task_energy_level' not in household_columns:
+            db.session.execute(text("ALTER TABLE household ADD COLUMN default_task_energy_level VARCHAR(20) DEFAULT 'Low'"))
+
         if 'project_phase' not in all_tables:
             print("Creating 'project_phase' table...")
             ProjectPhase.__table__.create(db.engine)
@@ -1102,7 +1135,8 @@ def inbox():
 @app.route('/inbox/add', methods=['POST'])
 def add_inbox():
     db.session.add(InboxItem(household_id=session['household_id'], captured_by_user_id=session['user_id'],
-                             title=request.form.get('title'), context=format_context(request.form.get('context')), note=request.form.get('note')))
+                             title=request.form.get('title'), context=format_context(request.form.get('context')),
+                             note=(request.form.get('note') or '').strip() or None))
     db.session.commit()
     flash("Captured!", "success")
     return redirect(url_for('inbox'))
@@ -1148,7 +1182,7 @@ def process_inbox(item_id):
     action = ActionItem(
         household_id=session['household_id'],
         title=request.form.get('title'),
-        description=request.form.get('description'),
+        description=(request.form.get('description') or '').strip() or None,
         sort_order=sort_order,
         item_type=request.form.get('item_type'),
         time_estimate=int(request.form.get('time_estimate')) if request.form.get('time_estimate') else None,
@@ -1213,7 +1247,7 @@ def add_action():
     action = ActionItem(
         household_id=hid,
         title=request.form.get('title'),
-        description=request.form.get('description'),
+        description=(request.form.get('description') or '').strip() or None,
         sort_order=sort_order,
         item_type=request.form.get('item_type', 'task'),
         complexity_fib=int(request.form.get('complexity_fib', 1)),
@@ -1251,6 +1285,7 @@ def add_action_bulk():
     status = request.form.get('status', 'icebox')
     context = request.form.get('context')
     formatted_context = format_context(context)
+    task_defaults = get_task_defaults(hid)
 
     for item_title in items:
         sort_order = 0
@@ -1265,7 +1300,10 @@ def add_action_bulk():
             project_id=project_id,
             phase_id=phase_id or (get_default_project_phase(project_id).id if project_id and get_default_project_phase(project_id) else None),
             status=status,
-            context=formatted_context,
+            context=formatted_context or format_context(task_defaults['context']),
+            time_estimate=task_defaults['time_estimate'],
+            energy_level=task_defaults['energy_level'],
+            due_date=datetime.strptime(task_defaults['due_date'], '%Y-%m-%d'),
             sort_order=sort_order,
             owner_user_id=session.get('user_id')
         )
@@ -1286,7 +1324,7 @@ def edit_action(id):
         action.impact = float(request.form.get('impact')) if request.form.get('impact') else None
         action.effort = float(request.form.get('effort')) if request.form.get('effort') else None
         action.context = format_context(request.form.get('context'))
-        action.description = request.form.get('description')
+        action.description = (request.form.get('description') or '').strip() or None
         action.status = request.form.get('status')
         if action.status == 'done' and action.completed_at is None:
             action.completed_at = get_local_now()
@@ -1483,6 +1521,7 @@ def dashboard(): # User's summary with today's actions from the log
 
     return render_template('dashboard.html', activity=activity, today_completions=completions)
 
+@app.route('/admin', methods=['GET', 'POST'])
 @app.route('/settings', methods=['GET', 'POST'])
 def settings_view():
     hid = session.get('household_id')
@@ -1496,6 +1535,22 @@ def settings_view():
             db.session.add(setting)
             db.session.commit()
             flash('UI settings updated.', 'success')
+            return redirect(url_for('settings_view'))
+        if form_name == 'task_defaults':
+            household = db.session.get(Household, hid)
+            if not household:
+                flash('Household settings are unavailable.', 'danger')
+                return redirect(url_for('settings_view'))
+            try:
+                household.default_task_context = request.form.get('default_task_context', '').strip()
+                household.default_task_time_estimate = max(0, int(request.form.get('default_task_time_estimate', 15)))
+                household.default_task_due_days = max(0, int(request.form.get('default_task_due_days', 14)))
+                household.default_task_energy_level = request.form.get('default_task_energy_level', 'Low')
+            except ValueError:
+                flash('Time estimate and due date offset must be whole numbers.', 'danger')
+                return redirect(url_for('settings_view'))
+            db.session.commit()
+            flash('Default task values updated.', 'success')
             return redirect(url_for('settings_view'))
 
     # Data for System Stats
@@ -2448,7 +2503,6 @@ def get_export_data():
 if __name__ == '__main__':
     with app.app_context():
         setup_db()
-        run_migrations()
     scheduler.init_app(app)
     # Add the new daily backup job to the scheduler
     scheduler.add_job(id='DailyBackupJob', func=daily_backup_job, trigger='cron', hour=2) # Runs at 2 AM
