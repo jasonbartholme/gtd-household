@@ -34,6 +34,24 @@
                     <textarea class="form-control" id="description" name="description" rows="4">{{ action.description or '' }}</textarea>
                 </div>
 
+                <div id="blocked-fields" {% if action.status != 'blocked' %}hidden{% endif %}>
+                    <div class="mb-3">
+                        <label for="blocked_reason" class="form-label">Blocker reason</label>
+                        <textarea class="form-control" id="blocked_reason" name="blocked_reason" rows="3">{{ action.blocked_reason or '' }}</textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="blocked_by_task_id" class="form-label">Waiting for task</label>
+                        <select class="form-select" id="blocked_by_task_id" name="blocked_by_task_id">
+                            <option value="">No task dependency</option>
+                            {% for task in all_actions %}
+                            {% if task.id != action.id and not task.is_deleted %}
+                            <option value="{{ task.id }}" {% if action.blocked_by_task_id == task.id %}selected{% endif %}>{{ task.title }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label for="image" class="form-label">Upload Image</label>
                     <input type="file" class="form-control" id="image" name="image" accept="image/*">
@@ -237,6 +255,14 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    var statusSelect = document.getElementById('status');
+    var blockedFields = document.getElementById('blocked-fields');
+    if (statusSelect && blockedFields) {
+        statusSelect.addEventListener('change', function () {
+            blockedFields.hidden = statusSelect.value !== 'blocked';
+        });
+    }
+
   var imageEditModalEl = document.getElementById('imageEditModal');
   if (!imageEditModalEl) return;
   var imageEditModal = new bootstrap.Modal(imageEditModalEl);

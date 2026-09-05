@@ -36,6 +36,16 @@
                         {% if item.description %}
                         <p class="mb-1 small text-muted card-details">{{ item.description|truncate(100) }}</p>
                         {% endif %}
+                        {% if item.status == 'blocked' and (item.blocked_reason or item.blocked_by_task) %}
+                        <div class="small text-danger-emphasis card-details mb-1">
+                            {% if item.blocked_reason %}
+                            <div><i class="bi bi-exclamation-circle me-1"></i>{{ item.blocked_reason|truncate(100) }}</div>
+                            {% endif %}
+                            {% if item.blocked_by_task %}
+                            <div><i class="bi bi-arrow-return-right me-1"></i>Waiting for <a href="{{ url_for('edit_action', id=item.blocked_by_task.id) }}" class="link-danger">{{ item.blocked_by_task.title }}</a></div>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                         {% if item.project %}
                         <small class="d-block text-muted card-details">
                             <i class="bi bi-folder"></i> <a href="{{ url_for('project_detail', id=item.project.id) }}" class="text-decoration-none">{{ item.project.name }}</a>

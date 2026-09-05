@@ -102,8 +102,16 @@
             {% set phase_name = group.phase.name if group.phase else group.name|default('Unassigned') %}
             {% set phase_id = group.phase.id if group.phase else 'unassigned' %}
             <div class="card mb-4">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">{{ phase_name }}</h5>
+                    {% if group.phase %}
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editPhaseModal-{{ phase_id }}" aria-label="Edit {{ phase_name }}"><i class="bi bi-pencil"></i></button>
+                        <form action="{{ url_for('delete_project_phase', project_id=project.id, phase_id=phase_id) }}" method="POST" onsubmit="return confirm('Delete this phase? Its tasks will move to another active phase.');">
+                            <button type="submit" class="btn btn-outline-danger" aria-label="Delete {{ phase_name }}"><i class="bi bi-trash"></i></button>
+                        </form>
+                    </div>
+                    {% endif %}
                 </div>
                 <div class="list-group list-group-flush" id="phase-list-{{ phase_id }}" data-phase-id="{{ phase_id }}">
                     {% for action in group.active_tasks %}
@@ -138,6 +146,28 @@
                 </div>
                 {% endif %}
             </div>
+            {% if group.phase %}
+            <div class="modal fade" id="editPhaseModal-{{ phase_id }}" tabindex="-1" aria-labelledby="editPhaseModalLabel-{{ phase_id }}" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form action="{{ url_for('edit_project_phase', project_id=project.id, phase_id=phase_id) }}" method="POST">
+                            <div class="modal-header">
+                                <h2 class="modal-title fs-5" id="editPhaseModalLabel-{{ phase_id }}">Edit Phase</h2>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <label class="form-label" for="phase-name-{{ phase_id }}">Phase Name</label>
+                                <input type="text" class="form-control" id="phase-name-{{ phase_id }}" name="name" value="{{ phase_name }}" required>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save Changes</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         {% endfor %}
     {% endif %}
 

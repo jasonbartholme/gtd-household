@@ -4,7 +4,16 @@
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0">{{ page_title }}</h1>
-        <button type="submit" form="icebox-form" class="btn btn-primary">Move Selected to Ready</button>
+        <div class="d-flex align-items-center gap-2">
+            <select name="project_id" form="icebox-form" class="form-select" aria-label="Assign selected tasks to a project">
+                <option value="">Add selected to project...</option>
+                {% for project in all_projects %}
+                <option value="{{ project.id }}">{{ project.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" form="icebox-form" name="bulk_action" value="assign_project" class="btn btn-outline-primary text-nowrap">Add to Project</button>
+            <button type="submit" form="icebox-form" name="bulk_action" value="move_ready" class="btn btn-primary text-nowrap">Move Selected to Ready</button>
+        </div>
     </div>
     {% include '_page_intro.html' %}
 

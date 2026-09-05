@@ -159,6 +159,7 @@ class ProjectPhase(db.Model):
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=get_local_now)
     is_deleted = db.Column(db.Boolean, default=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
 
     actions = db.relationship('ActionItem', backref='phase', lazy=True)
 
@@ -214,6 +215,8 @@ class ActionItem(db.Model):
     energy_level = db.Column(db.String(20), nullable=True) # e.g., Low, Medium, High
     impact = db.Column(db.Float, nullable=True) # 0-100, subjective impact rating
     effort = db.Column(db.Float, nullable=True) # 0-100, subjective effort rating
+    blocked_reason = db.Column(db.Text, nullable=True)
+    blocked_by_task_id = db.Column(db.Integer, db.ForeignKey('action_item.id'), nullable=True)
     owner_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
@@ -230,6 +233,7 @@ class ActionItem(db.Model):
     lng = db.Column(db.Float, nullable=True)
 
     owner = db.relationship('User', foreign_keys=[owner_user_id], backref='owned_actions')
+    blocked_by_task = db.relationship('ActionItem', remote_side=[id], foreign_keys=[blocked_by_task_id])
     assets = db.relationship('Asset', secondary=action_asset, backref=db.backref('actions', lazy=True))
     supplies = db.relationship('Supply', secondary=action_supply, backref=db.backref('actions', lazy=True))
     collaborators = db.relationship('User', secondary=action_collaborators, lazy='subquery', backref=db.backref('collaborations', lazy=True))
@@ -671,6 +675,9 @@ def run_migrations():
         if 'sort_order' not in project_phase_columns:
             db.session.execute(text('ALTER TABLE project_phase ADD COLUMN sort_order INTEGER DEFAULT 0'))
 
+        if 'deleted_at' not in project_phase_columns:
+            db.session.execute(text('ALTER TABLE project_phase ADD COLUMN deleted_at DATETIME'))
+
         # Migration 10: Add impact/effort matrix fields to action_item and project
         # (must run before any ORM query against Project/ActionItem, since the model
         # classes already declare these columns)
@@ -678,6 +685,11 @@ def run_migrations():
             print("Adding 'impact' and 'effort' columns to 'action_item' table...")
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN impact FLOAT'))
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN effort FLOAT'))
+
+        if 'blocked_reason' not in action_item_columns:
+            print("Adding blocked-task fields to 'action_item' table...")
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN blocked_reason TEXT'))
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN blocked_by_task_id INTEGER REFERENCES action_item(id)'))
 
         if 'impact' not in project_columns:
             print("Adding 'impact' and 'effort' columns to 'project' table...")
@@ -973,6 +985,48 @@ def add_project_phase(id):
     else:
         flash('Phase name is required.', 'warning')
     return redirect(url_for('project_detail', id=id))
+
+@app.route('/projects/<int:project_id>/phases/<int:phase_id>/edit', methods=['POST'])
+def edit_project_phase(project_id, phase_id):
+    phase = db.session.get(ProjectPhase, phase_id)
+    if not phase or phase.project_id != project_id or phase.household_id != session.get('household_id') or phase.is_deleted:
+        flash('Phase not found.', 'danger')
+        return redirect(url_for('project_detail', id=project_id))
+
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        flash('Phase name is required.', 'warning')
+        return redirect(url_for('project_detail', id=project_id))
+
+    phase.name = name
+    db.session.commit()
+    flash('Phase updated.', 'success')
+    return redirect(url_for('project_detail', id=project_id))
+
+@app.route('/projects/<int:project_id>/phases/<int:phase_id>/delete', methods=['POST'])
+def delete_project_phase(project_id, phase_id):
+    phase = db.session.get(ProjectPhase, phase_id)
+    if not phase or phase.project_id != project_id or phase.household_id != session.get('household_id') or phase.is_deleted:
+        flash('Phase not found.', 'danger')
+        return redirect(url_for('project_detail', id=project_id))
+
+    replacement_phase = ProjectPhase.query.filter(
+        ProjectPhase.project_id == project_id,
+        ProjectPhase.is_deleted == False,
+        ProjectPhase.id != phase_id
+    ).order_by(ProjectPhase.sort_order.asc(), ProjectPhase.created_at.asc()).first()
+    if not replacement_phase:
+        flash('Add another phase before deleting the last active phase.', 'warning')
+        return redirect(url_for('project_detail', id=project_id))
+
+    ActionItem.query.filter_by(project_id=project_id, phase_id=phase_id).update(
+        {'phase_id': replacement_phase.id}, synchronize_session=False
+    )
+    phase.is_deleted = True
+    phase.deleted_at = get_local_now()
+    db.session.commit()
+    flash(f"Phase deleted. Its tasks moved to '{replacement_phase.name}'.", 'success')
+    return redirect(url_for('project_detail', id=project_id))
 
 @app.route('/projects/<int:id>/reorder_tasks', methods=['POST'])
 def reorder_project_tasks(id):
@@ -1401,6 +1455,17 @@ def edit_action(id):
         action.context = format_context(request.form.get('context'))
         action.description = (request.form.get('description') or '').strip() or None
         action.status = request.form.get('status')
+        if action.status == 'blocked':
+            action.blocked_reason = (request.form.get('blocked_reason') or '').strip() or None
+            blocked_by_task_id = request.form.get('blocked_by_task_id', type=int)
+            blocked_by_task = db.session.get(ActionItem, blocked_by_task_id) if blocked_by_task_id else None
+            if blocked_by_task and (blocked_by_task.id == action.id or blocked_by_task.household_id != action.household_id or blocked_by_task.is_deleted):
+                flash('Select a valid task in this household as the dependency.', 'danger')
+                return redirect(url_for('edit_action', id=action.id))
+            action.blocked_by_task_id = blocked_by_task.id if blocked_by_task else None
+        else:
+            action.blocked_reason = None
+            action.blocked_by_task_id = None
         if action.status == 'done' and action.completed_at is None:
             action.completed_at = get_local_now()
             action.owner_user_id = session.get('user_id')
@@ -1534,13 +1599,41 @@ def icebox_view():
     hid = session.get('household_id')
 
     if request.method == 'POST':
-        task_ids_to_move = request.form.getlist('task_ids')
-        if task_ids_to_move:
-            ActionItem.query.filter(ActionItem.id.in_(task_ids_to_move), ActionItem.household_id == hid)\
+        task_ids = request.form.getlist('task_ids')
+        selected_tasks = ActionItem.query.filter(
+            ActionItem.id.in_(task_ids),
+            ActionItem.household_id == hid,
+            ActionItem.status == 'icebox',
+            ActionItem.is_deleted == False
+        ).all() if task_ids else []
+
+        if request.form.get('bulk_action') == 'assign_project':
+            project_id = request.form.get('project_id', type=int)
+            project = db.session.get(Project, project_id) if project_id else None
+            if not project or project.household_id != hid or project.is_deleted:
+                flash('Select an active project before assigning tasks.', 'danger')
+            elif not selected_tasks:
+                flash('Select at least one Icebox task to assign.', 'warning')
+            else:
+                default_phase = get_default_project_phase(project.id)
+                highest = ActionItem.query.filter_by(project_id=project.id, phase_id=default_phase.id).order_by(ActionItem.sort_order.desc()).first()
+                next_sort_order = (highest.sort_order + 1) if highest else 0
+                for task in selected_tasks:
+                    task.project_id = project.id
+                    task.phase_id = default_phase.id
+                    task.sort_order = next_sort_order
+                    next_sort_order += 1
+                db.session.commit()
+                flash(f"Added {len(selected_tasks)} tasks to '{project.name}'.", 'success')
+                log_activity(session.get('user_id'), 'bulk_assign_project', f"Added {len(selected_tasks)} Icebox tasks to {project.name}.")
+        elif selected_tasks:
+            ActionItem.query.filter(ActionItem.id.in_([task.id for task in selected_tasks]))\
                 .update({ActionItem.status: 'ready'}, synchronize_session=False)
             db.session.commit()
-            flash(f"Moved {len(task_ids_to_move)} tasks to the 'Ready' column on the board.", "success")
-            log_activity(session.get('user_id'), 'bulk_move_to_ready', f"Moved {len(task_ids_to_move)} tasks from Icebox to Ready.")
+            flash(f"Moved {len(selected_tasks)} tasks to the 'Ready' column on the board.", "success")
+            log_activity(session.get('user_id'), 'bulk_move_to_ready', f"Moved {len(selected_tasks)} tasks from Icebox to Ready.")
+        else:
+            flash('Select at least one Icebox task.', 'warning')
         return redirect(url_for('icebox_view'))
 
     # GET request
