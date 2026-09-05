@@ -86,6 +86,10 @@ def get_local_now():
     """Returns current time in Central Time (US/Chicago) as a naive datetime for SQLite."""
     return datetime.now(ZoneInfo("America/Chicago")).replace(tzinfo=None)
 
+BUILD_TIMESTAMP = datetime.fromtimestamp(
+    os.path.getmtime(__file__), ZoneInfo("America/Chicago")
+).strftime('%Y-%m-%d %H:%M %Z')
+
 def get_task_defaults(household_id):
     household = db.session.get(Household, household_id) if household_id else None
     context = household.default_task_context if household else 'General'
@@ -540,7 +544,8 @@ def inject_global_data():
         flash_dismiss_time=flash_dismiss_time,
         task_defaults=task_defaults,
         show_feature_descriptions=show_feature_descriptions,
-        page_intro=page_intro
+        page_intro=page_intro,
+        build_timestamp=BUILD_TIMESTAMP
     )
 first_run = True
 

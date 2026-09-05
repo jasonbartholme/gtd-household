@@ -6,12 +6,12 @@ A comprehensive, Python-driven household management system built around the "Get
 Key Features
 ------------
 
-### The Inbox & Processing
+### Inbox & Assigned Work
 
-*   **Brain Dump & Bulk Capture:** Quickly capture single thoughts or paste multiple lines at once to get them out of your head and into your inbox. The inbox now features a tabbed interface for both single and bulk capture.
-*   **Clarify Workflow:** A dedicated modal to process inbox items. Transform raw thoughts into actionable tasks, assign them to Projects, give them Contexts (e.g., `@Garage`), or defer them to the `Someday/Maybe` list.
-*   **Bulk Task Creation:** Create multiple actionable tasks in one pass, with project, context, scheduling, effort, and recurrence fields.
-*   **"Save and Next" Button:** A streamlined workflow to rapidly process your entire inbox without leaving the page.
+*   **Capture:** Use the global **New Task** action to get tasks and ideas out of your head quickly.
+*   **My Tasks:** The Inbox route presents active tasks assigned to the current household member, including collaborative tasks.
+*   **Assignment Groups:** Tasks assigned by another household member appear separately above tasks you own, making delegated work easy to spot.
+*   **Relative Due Dates:** Assigned tasks use calendar-aware labels such as `Due today`, `Due tomorrow`, and `Due in 3 days`.
 
 <img width="1412" height="839" alt="board-view" src="https://github.com/user-attachments/assets/a911a7db-791e-485d-92d6-47be0ddc74ce" />
 
@@ -21,7 +21,7 @@ Key Features
 *   **Interactive Board:** A drag-and-drop Kanban interface (powered by SortableJS) with columns for Ready, In Progress, Blocked, and Done.
 *   **Compact View Toggle:** Switch between a full and compact view of tasks on the Kanban board to manage visual clutter.
 *   **Task Details:** Tasks now include fields for `Time Estimate` (in minutes) and `Energy Level` (Low, Medium, High) to aid in task selection.
-*   **Collaborator Assignment:** Assign multiple users to a task, with their avatars displayed on the Kanban cards for quick visibility.
+*   **Collaborator Assignment:** Assign multiple users to a task. Shared Board cards identify the person who assigned the task to the current viewer.
 *   **Recurring Tasks:** Actions can be set to recur automatically. Completing a recurring task automatically calculates the next due date and respawns it in the Icebox.
 *   **Contexts & Due Dates:** Assign contexts and due dates to visually track where and when things need to happen.
 
@@ -47,7 +47,8 @@ Key Features
 *   **Power Tracking:** Monitor power sources, battery types, and expected battery lifespans.
 *   **Cost of Ownership:** Automatically logs and totals all general expenses and maintenance costs associated with an asset.
 *   **Maintenance Schedules:** Set up recurring maintenance tasks. Logging completion automatically adds to the asset's expense history and calculates the next due date.
-*   **Supply Management:** Keep track of consumables with set reorder thresholds.
+*   **Supply Management:** Keep track of consumables with reorder thresholds in a context-grouped, horizontal store-friendly view.
+*   **Supply Images:** Upload an optional square item image to make supplies easier to recognize while reordering. Supplies without an image use an item-icon fallback.
 *   **Smart Restocking:** When a supply drops below its threshold, the system can automatically add it to a shopping list or generate a new Errand.
 *   **Expense Management:** Track project-specific expenses with fields for amount, description, notes, source, URL, and date. Expenses are linked to projects and displayed on project detail pages. A dedicated "Expenses" page allows for editing, soft-deleting, and paginating expense records.
 *   **Expense Reporting:** Review monthly expense totals in a chart and filter recent project expenses by date range.
@@ -67,7 +68,9 @@ Key Features
 
 *   **Automated Archiving:** A daily scheduled job automatically moves tasks from the "Done" column to the Archive, keeping the board focused on current work. Administrators can also trigger the job manually.
 *   **Archive Page:** A paginated and searchable view of all completed tasks and projects.
-*   **Settings Page:** Monitor database health, activity, active lists, image counts, and upload storage. Configure flash-message dismissal timing from the UI.
+*   **Task Defaults:** Configure household defaults for task context, time estimate, due-date offset, and energy level to standardize incoming work.
+*   **New-User Guidance:** GTD-oriented page descriptions can be shown or hidden globally from the admin panel.
+*   **Settings Page:** Available at `/admin` (and `/settings`) for database health, activity, active lists, image counts, upload storage, task defaults, and UI preferences.
 *   **Data Portability:** 1-click JSON export of the entire database for seamless backups. Restore from a JSON file.
 *   **Automatic Backups:** A daily scheduler creates a JSON backup when activity has changed since the previous backup.
 *   **Admin Purge:** Admins can execute a hard purge to permanently delete stale, soft-deleted lists and list items.
@@ -78,11 +81,12 @@ Setup & Installation
 
 This application is designed for easy local setup.
 
-1.  **Prerequisites:** Ensure Python 3.9+ is installed.
-2.  **Install Dependencies:** Run `pip install -r requirements.txt` in your project directory.
-3.  **Run the Application:** Execute `python app.py` from your project directory.
-4.  **Access:** Open your web browser and navigate to `http://localhost:5000`. The SQLite database (`app.db`) will be created automatically on the first run, seeded with sample demo data.
-5.  **Backups and uploads:** JSON backups are written to `backups/`; project images and thumbnails are stored under `static/uploads/`.
+1.  **Prerequisites:** Ensure Python 3.12 is installed.
+2.  **Create a virtual environment:** Run `python3.12 -m venv venv` and activate it with `source venv/bin/activate`.
+3.  **Install Dependencies:** Run `pip install -r requirements.txt` in your project directory.
+4.  **Run the Application:** Execute `python app.py` from your project directory.
+5.  **Access:** Open your web browser and navigate to `http://localhost:5000`. The SQLite database (`app.db`) will be created automatically on the first run, seeded with sample demo data.
+6.  **Backups and uploads:** JSON backups are written to `backups/`; project, asset, and supply images are stored under `static/uploads/`.
 
 Tech Stack
 -------------
