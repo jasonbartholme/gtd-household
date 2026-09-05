@@ -1,54 +1,69 @@
 {% extends "base.html" %}
     {% block content %}
+    <style>
+        .supply-thumbnail {
+            width: 88px;
+            height: 88px;
+            flex: 0 0 88px;
+            object-fit: cover;
+        }
+    </style>
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="h4 mb-0">Supplies</h2>
+        <h1>Supplies</h1>
         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addSupplyModal">+ Add</button>
     </div>
     {% include '_page_intro.html' %}
-    <div class="row g-3">
-        {% for supply in supplies %}
-        <div class="col-md-3">
-            <div class="card bg-dark border-secondary p-3 text-center shadow-sm h-100">
-                <h6>{{ supply.name }}</h6>
-                <p class="text-muted small mb-1">{{ supply.context or 'General' }}</p>
-                {% if supply.store_name %}
-                    <p class="text-warning small mb-1"><i class="bi bi-shop"></i> {{ supply.store_name }}</p>
-                {% endif %}
-                {% if supply.projects %}
-                    <p class="text-info small mb-1"><i class="bi bi-folder2-open"></i> {{ supply.projects | map(attribute='name') | join(', ') }}</p>
-                {% endif %}
-                <h2 class="{{ 'text-danger' if supply.quantity <= supply.reorder_threshold else 'text-success' }}">{{ supply.quantity }}</h2>
-                <div class="d-grid gap-2 mt-auto">
-                    <form action="{{ url_for('use_supply', id=supply.id) }}" method="POST"><button class="btn btn-sm btn-outline-info w-100">Use</button></form>
-                    {% if supply.purchase_url %}
-                        <a href="{{ supply.purchase_url }}" target="_blank" class="btn btn-sm btn-link text-info text-decoration-none small">Buy Online</a>
+    {% for context, supplies in supplies_by_context.items() %}
+    <section class="mb-4" aria-labelledby="supply-context-{{ loop.index }}">
+        <h2 class="h5 text-info border-bottom border-secondary pb-2 mb-3" id="supply-context-{{ loop.index }}">{{ context }}</h2>
+        <div class="vstack gap-2">
+            {% for supply in supplies %}
+            <article class="card bg-dark border-secondary">
+                <div class="card-body p-2 d-flex align-items-center gap-3">
+                    {% if supply.image_filename %}
+                    <img src="{{ url_for('static', filename='uploads/supplies/' + supply.image_filename) }}" class="supply-thumbnail rounded" alt="{{ supply.name }}">
+                    {% else %}
+                    <div class="supply-thumbnail rounded bg-secondary d-flex align-items-center justify-content-center" aria-label="No image for {{ supply.name }}">
+                        <i class="bi bi-box-seam fs-2 text-light"></i>
+                    </div>
                     {% endif %}
-                    <button type="button" class="btn btn-sm btn-outline-secondary edit-supply-btn"
-                        data-id="{{ supply.id }}"
-                        data-name="{{ supply.name }}"
-                        data-quantity="{{ supply.quantity }}"
-                        data-threshold="{{ supply.reorder_threshold }}"
-                        data-context="{{ supply.context or '' }}"
-                        data-purchase-url="{{ supply.purchase_url or '' }}"
-                        data-store-name="{{ supply.store_name or '' }}"
-                        data-auto-add="{{ 'true' if supply.auto_add_to_shopping else 'false' }}"
-                        data-project-ids="{{ supply.projects | map(attribute='id') | list | join(',') }}">
-                        <i class="bi bi-pencil"></i> Edit
-                    </button>
-                    <form action="{{ url_for('delete_supply', id=supply.id) }}" method="POST" class="confirm-delete">
-                        <button type="submit" class="btn btn-sm btn-outline-danger w-100"><i class="bi bi-trash"></i> Delete</button>
-                    </form>
+                    <div class="flex-grow-1 min-w-0">
+                        <h3 class="h6 mb-1">{{ supply.name }}</h3>
+                        {% if supply.store_name %}<div class="small text-warning"><i class="bi bi-shop"></i> {{ supply.store_name }}</div>{% endif %}
+                        {% if supply.projects %}<div class="small text-muted"><i class="bi bi-folder2-open"></i> {{ supply.projects | map(attribute='name') | join(', ') }}</div>{% endif %}
+                    </div>
+                    <div class="text-center px-2">
+                        <div class="small text-muted">On hand</div>
+                        <div class="h4 mb-0 {{ 'text-danger' if supply.quantity <= supply.reorder_threshold else 'text-success' }}">{{ supply.quantity }}</div>
+                        <div class="small text-muted">Reorder at {{ supply.reorder_threshold }}</div>
+                    </div>
+                    <div class="d-flex flex-column gap-1 align-items-stretch">
+                        <form action="{{ url_for('use_supply', id=supply.id) }}" method="POST"><button class="btn btn-sm btn-outline-info w-100">Use</button></form>
+                        {% if supply.purchase_url %}<a href="{{ supply.purchase_url }}" target="_blank" class="btn btn-sm btn-outline-success">Buy</a>{% endif %}
+                        <button type="button" class="btn btn-sm btn-outline-secondary edit-supply-btn"
+                            data-id="{{ supply.id }}" data-name="{{ supply.name }}" data-quantity="{{ supply.quantity }}"
+                            data-threshold="{{ supply.reorder_threshold }}" data-context="{{ supply.context or '' }}"
+                            data-purchase-url="{{ supply.purchase_url or '' }}" data-store-name="{{ supply.store_name or '' }}"
+                            data-auto-add="{{ 'true' if supply.auto_add_to_shopping else 'false' }}"
+                            data-project-ids="{{ supply.projects | map(attribute='id') | list | join(',') }}">Edit</button>
+                        <form action="{{ url_for('delete_supply', id=supply.id) }}" method="POST" class="confirm-delete">
+                            <button type="submit" class="btn btn-sm btn-outline-danger w-100">Delete</button>
+                        </form>
+                    </div>
                 </div>
-            </div>
+            </article>
+            {% endfor %}
         </div>
-        {% endfor %}
-    </div>
+    </section>
+    {% else %}
+    <div class="card card-body text-center text-muted">No supplies have been added yet.</div>
+    {% endfor %}
 
     <!-- Add Supply Modal -->
     <div class="modal fade" id="addSupplyModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content bg-dark text-light border-secondary">
-                <form action="{{ url_for('add_supply') }}" method="POST">
+                <form action="{{ url_for('add_supply') }}" method="POST" enctype="multipart/form-data">
                     <div class="modal-header border-secondary"><h5 class="modal-title">New Supply Item</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body">
                         <div class="mb-3"><label class="small text-muted">Item Name</label><input type="text" name="name" class="form-control bg-dark text-light border-secondary" required></div>
@@ -59,6 +74,7 @@
                         <div class="mb-3"><label class="small text-muted">Context (Location in House)</label><input type="text" name="context" class="form-control bg-dark text-light border-secondary" placeholder="Kitchen, Garage..."></div>
                         <div class="mb-3"><label class="small text-muted">Purchase URL</label><input type="url" name="purchase_url" class="form-control bg-dark text-light border-secondary" placeholder="https://amazon.com/..."></div>
                         <div class="mb-3"><label class="small text-muted">Store/Location (Where to buy)</label><input type="text" name="store_name" class="form-control bg-dark text-light border-secondary" placeholder="e.g. Home Depot, Costco"></div>
+                        <div class="mb-3"><label class="small text-muted">Item Image</label><input type="file" name="image" class="form-control bg-dark text-light border-secondary" accept="image/*"></div>
                         <div class="mb-3">
                             <label class="small text-muted">Used By Projects</label>
                             <select name="projects" class="form-select bg-dark text-light border-secondary" multiple size="4">
@@ -91,7 +107,7 @@
     <div class="modal fade" id="editSupplyModal" tabindex="-1">
         <div class="modal-dialog">
             <div class="modal-content bg-dark text-light border-secondary">
-                <form id="edit-supply-form" method="POST">
+                <form id="edit-supply-form" method="POST" enctype="multipart/form-data">
                     <div class="modal-header border-secondary"><h5 class="modal-title">Edit Supply Item</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
                     <div class="modal-body">
                         <div class="mb-3"><label class="small text-muted">Item Name</label><input type="text" name="name" id="edit-supply-name" class="form-control bg-dark text-light border-secondary" required></div>
@@ -102,6 +118,7 @@
                         <div class="mb-3"><label class="small text-muted">Context (Location in House)</label><input type="text" name="context" id="edit-supply-context" class="form-control bg-dark text-light border-secondary"></div>
                         <div class="mb-3"><label class="small text-muted">Purchase URL</label><input type="url" name="purchase_url" id="edit-supply-purchase-url" class="form-control bg-dark text-light border-secondary"></div>
                         <div class="mb-3"><label class="small text-muted">Store/Location (Where to buy)</label><input type="text" name="store_name" id="edit-supply-store-name" class="form-control bg-dark text-light border-secondary"></div>
+                        <div class="mb-3"><label class="small text-muted">Replace Item Image</label><input type="file" name="image" class="form-control bg-dark text-light border-secondary" accept="image/*"></div>
                         <div class="mb-3">
                             <label class="small text-muted">Used By Projects</label>
                             <select name="projects" id="edit-supply-projects" class="form-select bg-dark text-light border-secondary" multiple size="4">
@@ -125,7 +142,7 @@
     </div>
 
     <script>
-        (function(){
+        document.addEventListener('DOMContentLoaded', function(){
             var editModalEl = document.getElementById('editSupplyModal');
             if (!editModalEl) return;
             var editModal = new bootstrap.Modal(editModalEl);
@@ -149,6 +166,6 @@
                     editModal.show();
                 });
             });
-        })();
+        });
     </script>
     {% endblock %}

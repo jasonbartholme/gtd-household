@@ -9,7 +9,7 @@
                     <div>
                         <h4 class="text-info fw-bold mb-0 d-inline-block">{{ household_list.name }}</h4>
                         {% if household_list.location_context %}
-                            <span class="badge bg-warning text-dark ms-2">@{{ household_list.location_context }}</span>
+                            <span class="badge bg-warning text-dark ms-2">{{ household_list.location_context }}</span>
                         {% endif %}
                     </div>
                     <div class="dropdown">

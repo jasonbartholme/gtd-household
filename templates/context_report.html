@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
+{% set context_colors = ['#0d6efd', '#198754', '#dc3545', '#ffc107', '#0dcaf0', '#fd7e14', '#6f42c1', '#20c997', '#e83e8c', '#adb5bd', '#6610f2', '#17a2b8'] %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0">Context Report</h1>
@@ -19,8 +20,10 @@
                         {% for context, tasks in context_breakdown %}
                         <div class="list-group-item px-0">
                             <div class="d-flex justify-content-between align-items-center">
-                                <span><strong>{{ context }}</strong></span>
-                                <span class="badge bg-primary rounded-pill">{{ tasks|length }}</span>
+                                {% set context_color = context_colors[loop.index0 % (context_colors|length)] %}
+                                {% set dark_text = loop.index0 % (context_colors|length) in [3, 4, 7, 9, 11] %}
+                                <span class="badge rounded-pill" style="background-color: {{ context_color }}; color: {{ '#212529' if dark_text else '#fff' }};">{{ context }}</span>
+                                <span class="badge rounded-pill" style="background-color: {{ context_color }}; color: {{ '#212529' if dark_text else '#fff' }};">{{ tasks|length }}</span>
                             </div>
                         </div>
                         {% endfor %}
@@ -45,8 +48,10 @@
                 {% for context, tasks in context_breakdown %}
                 <div class="list-group-item">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h6 class="mb-0">{{ context }}</h6>
-                        <span class="badge bg-secondary">{{ tasks|length }} task{% if tasks|length != 1 %}s{% endif %}</span>
+                        {% set context_color = context_colors[loop.index0 % (context_colors|length)] %}
+                        {% set dark_text = loop.index0 % (context_colors|length) in [3, 4, 7, 9, 11] %}
+                        <span class="badge rounded-pill" style="background-color: {{ context_color }}; color: {{ '#212529' if dark_text else '#fff' }};">{{ context }}</span>
+                        <span class="badge rounded-pill" style="background-color: {{ context_color }}; color: {{ '#212529' if dark_text else '#fff' }};">{{ tasks|length }} task{% if tasks|length != 1 %}s{% endif %}</span>
                     </div>
                     <div class="row g-2">
                         {% for task in tasks %}
@@ -89,10 +94,7 @@
 
         const labels = {{ context_labels|tojson }};
         const values = {{ context_data|tojson }};
-        const colors = [
-            '#0d6efd', '#198754', '#dc3545', '#ffc107', '#0dcaf0', '#fd7e14',
-            '#6f42c1', '#20c997', '#e83e8c', '#adb5bd', '#6610f2', '#17a2b8'
-        ];
+        const colors = {{ context_colors|tojson }};
 
         new Chart(contextChartEl, {
             type: 'pie',

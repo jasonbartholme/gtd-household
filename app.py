@@ -302,6 +302,7 @@ class Supply(db.Model):
     context = db.Column(db.String(100))
     purchase_url = db.Column(db.String(500))
     store_name = db.Column(db.String(100))
+    image_filename = db.Column(db.String(255), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime, nullable=True)
 
@@ -456,6 +457,7 @@ def inject_global_data():
         'icebox_view': 'Icebox',
         'manage_projects': 'Projects',
         'manage_lists': 'Lists',
+        'manage_expenses': 'Expenses',
         'someday_view': 'Someday/Maybe',
         'calendar_view': 'Calendar',
         'assets': 'Assets',
@@ -487,6 +489,7 @@ def inject_global_data():
         'impact_effort_report': ('See the Tradeoffs', 'Compare the expected impact and effort of active work to help choose the next action deliberately.'),
         'expense_report': ('Review Spending Patterns', 'Regular review turns captured expense data into better household decisions.'),
         'today_done_view': ('Notice Completed Work', 'Reviewing completions builds trust in your system and gives today a clear stopping point.'),
+        'leaderboard': ('Celebrate Meaningful Progress', 'Use the leaderboard to notice completed commitments and recognize consistent follow-through across the household.'),
         'archive_view': ('Keep a Record', 'Completed work is archived so your active lists stay focused while past outcomes remain available for reference.'),
         'settings_view': ('Tune Your Trusted System', 'Set defaults and display preferences that make capturing and clarifying new tasks fast and consistent.'),
         'manage_users': ('Share Commitments Clearly', 'Keep household members visible so ownership and capacity are clear when you organize next actions.'),
@@ -758,6 +761,9 @@ def run_migrations():
             print("Adding soft delete fields to 'supply' table...")
             db.session.execute(text('ALTER TABLE supply ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
             db.session.execute(text('ALTER TABLE supply ADD COLUMN deleted_at DATETIME'))
+
+        if 'image_filename' not in supply_columns:
+            db.session.execute(text('ALTER TABLE supply ADD COLUMN image_filename VARCHAR(255)'))
 
         # Migration 9: Add estimated_cost and due_date to project
         if 'estimated_cost' not in project_columns:
@@ -2174,9 +2180,12 @@ def add_asset_expense(id):
 @app.route('/supplies')
 def supplies():
     hid = session.get('household_id')
-    items = Supply.query.filter_by(household_id=hid, is_deleted=False).all()
+    items = Supply.query.filter_by(household_id=hid, is_deleted=False).order_by(Supply.context, Supply.name).all()
+    supplies_by_context = {}
+    for item in items:
+        supplies_by_context.setdefault(item.context or 'General', []).append(item)
     all_projects = Project.query.filter_by(household_id=hid, is_deleted=False).order_by(Project.name).all() if hid else []
-    return render_template('supplies.html', supplies=items, all_projects=all_projects)
+    return render_template('supplies.html', supplies_by_context=supplies_by_context, all_projects=all_projects)
 
 @app.route('/supplies/add', methods=['POST'])
 def add_supply():
@@ -2195,6 +2204,15 @@ def add_supply():
     )
     db.session.add(new_supply)
     db.session.flush()
+
+    if 'image' in request.files:
+        file = request.files['image']
+        if file and file.filename:
+            filename = f"{uuid4().hex}_{secure_filename(file.filename)}"
+            upload_path = os.path.join(app.config['UPLOAD_FOLDER'], 'supplies')
+            os.makedirs(upload_path, exist_ok=True)
+            file.save(os.path.join(upload_path, filename))
+            new_supply.image_filename = filename
 
     project_ids = request.form.getlist('projects')
     if project_ids:
@@ -2228,6 +2246,15 @@ def edit_supply(id):
     supply.purchase_url = request.form.get('purchase_url')
     supply.store_name = request.form.get('store_name')
     supply.auto_add_to_shopping = 'auto_add_to_shopping' in request.form
+
+    if 'image' in request.files:
+        file = request.files['image']
+        if file and file.filename:
+            filename = f"{uuid4().hex}_{secure_filename(file.filename)}"
+            upload_path = os.path.join(app.config['UPLOAD_FOLDER'], 'supplies')
+            os.makedirs(upload_path, exist_ok=True)
+            file.save(os.path.join(upload_path, filename))
+            supply.image_filename = filename
 
     project_ids = request.form.getlist('projects')
     supply.projects = Project.query.filter(Project.id.in_(project_ids)).all() if project_ids else []
