@@ -5,23 +5,43 @@
     <h1 class="mb-4">{{ page_title }}</h1>
     {% include '_page_intro.html' %}
 
-    <div class="card mb-4">
-        <div class="card-body text-center">
-            <div class="row">
-                <div class="col"><h5 class="mb-0">Tasks Completed: <span class="badge bg-primary">{{ total_tasks }}</span></h5></div>
-                <div class="col"><h5 class="mb-0">Points Earned: <span class="badge bg-success">{{ total_points }}</span></h5></div>
-                <div class="col"><h5 class="mb-0">Time Spent: <span class="badge bg-secondary">{{ total_time }} min</span></h5></div>
-            </div>
+    <nav class="nav nav-pills gap-2 mb-4" aria-label="Activity period">
+        {% for option_key, option in period_options.items() %}
+        <a href="{{ url_for('today_done_view', period=option_key, date=selected_date.isoformat()) }}" class="nav-link {{ 'active' if period == option_key }}">{{ option.label }}</a>
+        {% endfor %}
+    </nav>
+
+    <div class="d-flex align-items-center justify-content-between border-top border-bottom py-3 mb-4">
+        <a href="{{ url_for('today_done_view', period=period, date=previous_date.isoformat()) }}" class="btn btn-outline-secondary" aria-label="Show previous period" title="Previous period"><i class="bi bi-chevron-left"></i></a>
+        <div class="text-center">
+            {% if start_date == selected_date %}
+            <div class="fw-semibold">{{ selected_date.strftime('%A, %B %-d, %Y') }}</div>
+            {% else %}
+            <div class="fw-semibold">{{ start_date.strftime('%b %-d, %Y') }} - {{ selected_date.strftime('%b %-d, %Y') }}</div>
+            {% endif %}
+            <small class="text-muted">{{ period_options[period].label }} activity</small>
         </div>
+        {% if can_go_next %}
+        <a href="{{ url_for('today_done_view', period=period, date=next_date.isoformat()) }}" class="btn btn-outline-secondary" aria-label="Show next period" title="Next period"><i class="bi bi-chevron-right"></i></a>
+        {% else %}
+        <span class="btn btn-outline-secondary disabled" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
+        {% endif %}
     </div>
 
-    <h2 class="mt-4 mb-3">Completed Tasks</h2>
+    <div class="row g-3 mb-5">
+        <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small mb-1">Tasks Completed</div><div class="fs-2 fw-semibold text-primary">{{ total_tasks }}</div></div></div></div>
+        <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small mb-1">Points Earned</div><div class="fs-2 fw-semibold text-success">{{ total_points }}</div></div></div></div>
+        <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="text-muted small mb-1">Time Spent</div><div class="fs-2 fw-semibold">{{ total_time }} min</div></div></div></div>
+    </div>
+
+    <section aria-labelledby="completed-tasks-heading">
+    <h2 id="completed-tasks-heading" class="h4 mb-3">Completed Tasks</h2>
     {% if tasks %}
     <div class="list-group">
         {% for task in tasks %}
-        <div class="list-group-item d-flex justify-content-between align-items-center">
+        <div class="list-group-item d-flex justify-content-between align-items-center gap-3">
             <div>
-                <h5 class="mb-1"><a href="{{ url_for('edit_action', id=task.id) }}" class="text-decoration-none">{{ task.title }}</a></h5>
+                <h3 class="h5 mb-1"><a href="{{ url_for('edit_action', id=task.id) }}" class="text-decoration-none">{{ task.title }}</a></h3>
                 {% if task.project %}
                 <small class="text-muted">Project: <a href="{{ url_for('project_detail', id=task.project.id) }}">{{ task.project.name }}</a></small>
                 {% else %}
@@ -31,15 +51,16 @@
                 <p class="mb-1 small text-muted">{{ task.description|truncate(100) }}</p>
                 {% endif %}
             </div>
-            <div class="text-end">
-                <span class="badge bg-secondary me-2">{{ task.complexity_fib }} pts</span>
-                <small class="text-muted">{{ task.completed_at|humanize }}</small>
+            <div class="text-end flex-shrink-0">
+                <span class="badge bg-secondary">{{ task.complexity_fib or 0 }} pts</span>
+                <small class="d-block text-muted mt-1">{{ task.completed_at.strftime('%b %-d, %-I:%M %p') }}</small>
             </div>
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <div class="card card-body text-center text-muted">No tasks completed yet today. Keep up the great work!</div>
+    <p class="text-muted">No tasks were completed in this period.</p>
     {% endif %}
+    </section>
 </div>
 {% endblock %}

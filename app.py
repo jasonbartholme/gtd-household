@@ -480,7 +480,7 @@ def inject_global_data():
         'leaderboard': 'Leaderboard',
         'kanban': 'Board',
         'inbox': 'Inbox',
-        'today_done_view': 'Today\'s Done',
+        'today_done_view': 'Today',
         'context_report': 'Context Report',
         'impact_effort_report': 'Impact/Effort Matrix',
         'review': 'Review',
@@ -519,7 +519,7 @@ def inject_global_data():
         'context_report': ('Work by Context', 'GTD contexts group actions by where, when, or how you can do them, making it easier to choose useful work in the moment.'),
         'impact_effort_report': ('See the Tradeoffs', 'Compare the expected impact and effort of active work to help choose the next action deliberately.'),
         'expense_report': ('Review Spending Patterns', 'Regular review turns captured expense data into better household decisions.'),
-        'today_done_view': ('Notice Completed Work', 'Reviewing completions builds trust in your system and gives today a clear stopping point.'),
+        'today_done_view': ('Notice Completed Work', 'Review completed work across any day or time span to build trust in your system and recognize progress.'),
         'leaderboard': ('Celebrate Meaningful Progress', 'Use the leaderboard to notice completed commitments and recognize consistent follow-through across the household.'),
         'search': ('Find Work Quickly', 'Search tasks and projects across your household, including completed and archived records.'),
         'archive_view': ('Keep a Record', 'Completed work is archived so your active lists stay focused while past outcomes remain available for reference.'),
@@ -538,7 +538,7 @@ def inject_global_data():
             'icebox_view': 'Icebox',
         },
         'Reports': {
-            'today_done_view': 'Today\'s Done',
+            'today_done_view': 'Today',
             'leaderboard': 'Leaderboard',
             'context_report': 'Context Report',
             'impact_effort_report': 'Impact/Effort Matrix',
@@ -2729,21 +2729,53 @@ def edit_expense(id):
 def today_done_view():
     hid = session.get('household_id')
     today = get_local_now().date()
-    today_start = datetime(today.year, today.month, today.day, 0, 0, 0)
-    tomorrow_start = today_start + timedelta(days=1)
+    period_options = {
+        '1d': {'label': '1 Day', 'days': 1},
+        '7d': {'label': '7 Days', 'days': 7},
+        '4w': {'label': '4 Weeks', 'days': 28},
+        '1y': {'label': '1 Year', 'days': 365},
+    }
+    period = request.args.get('period', '1d')
+    if period not in period_options:
+        period = '1d'
+    try:
+        selected_date = datetime.strptime(request.args.get('date', today.isoformat()), '%Y-%m-%d').date()
+    except ValueError:
+        selected_date = today
+    selected_date = min(selected_date, today)
+    period_days = period_options[period]['days']
+    start_date = selected_date - timedelta(days=period_days - 1)
+    period_start = datetime(start_date.year, start_date.month, start_date.day)
+    period_end = datetime(selected_date.year, selected_date.month, selected_date.day) + timedelta(days=1)
 
-    completed_tasks_today = ActionItem.query.filter(
+    tasks = ActionItem.query.filter(
         ActionItem.household_id == hid,
+        ActionItem.is_deleted == False,
         ActionItem.status.in_(['done', 'archived']),
-        ActionItem.completed_at >= today_start,
-        ActionItem.completed_at < tomorrow_start
+        ActionItem.completed_at >= period_start,
+        ActionItem.completed_at < period_end
     ).order_by(ActionItem.completed_at.desc()).all()
 
-    total_tasks = len(completed_tasks_today)
-    total_points = sum(task.complexity_fib for task in completed_tasks_today)
-    total_time = sum(task.time_estimate or 0 for task in completed_tasks_today)
+    total_tasks = len(tasks)
+    total_points = sum(task.complexity_fib or 0 for task in tasks)
+    total_time = sum(task.time_estimate or 0 for task in tasks)
+    previous_date = selected_date - timedelta(days=period_days)
+    next_date = selected_date + timedelta(days=period_days)
 
-    return render_template('today_done.html', tasks=completed_tasks_today, total_tasks=total_tasks, total_points=total_points, total_time=total_time)
+    return render_template(
+        'today_done.html',
+        tasks=tasks,
+        total_tasks=total_tasks,
+        total_points=total_points,
+        total_time=total_time,
+        period=period,
+        period_options=period_options,
+        start_date=start_date,
+        selected_date=selected_date,
+        previous_date=previous_date,
+        next_date=next_date,
+        can_go_next=next_date <= today
+    )
 
 @app.route('/archive')
 def archive_view():
