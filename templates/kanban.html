@@ -28,7 +28,19 @@
                 </div>
                 <div class="card-body list-group kanban-column" id="col-{{ status }}" data-status="{{ status }}">
                     {% for item in col_items %}
-                    <div class="list-group-item kanban-card" data-id="{{ item.id }}">
+                    {% set is_stale = ready_staleness_enabled and item.status == 'ready' and item.ready_days >= ready_staleness_days %}
+                    {% if is_stale %}
+                        {% set extra_days = item.ready_days - ready_staleness_days %}
+                        {% set staleness_factor = (extra_days / 3.0) if extra_days < 3.0 else 1.0 %}
+                        {% set staleness_factor = 0.15 if staleness_factor < 0.15 else staleness_factor %}
+                        {% set bg_alpha = 0.2 + (staleness_factor * 0.45) %}
+                        {% set border_alpha = 0.5 + (staleness_factor * 0.5) %}
+                        {% set glow_px = (4 + (staleness_factor * 10))|int %}
+                        {% set card_style = "background: linear-gradient(135deg, rgba(255, 140, 0, " ~ bg_alpha|round(2) ~ ") 0%, #495057 75%); border-color: rgba(255, 165, 0, " ~ border_alpha|round(2) ~ "); box-shadow: 0 0 " ~ glow_px ~ "px rgba(255, 140, 0, " ~ bg_alpha|round(2) ~ ");" %}
+                    {% else %}
+                        {% set card_style = "" %}
+                    {% endif %}
+                    <div class="list-group-item kanban-card {% if is_stale %}stale-card{% endif %}" data-id="{{ item.id }}" {% if is_stale %}style="{{ card_style }}"{% endif %}>
                         <div class="d-flex w-100 justify-content-between">
                             <h6 class="mb-1">{{ item.title }}</h6>
                             <i class="bi bi-grip-vertical fs-4" style="cursor: grab;"></i>
@@ -56,6 +68,9 @@
                         {% endif %}
                         <div class="mt-2 d-flex justify-content-between align-items-center">
                             <div class="card-details">
+                                {% if is_stale %}
+                                <span class="badge bg-warning text-dark me-1 stale-badge" data-bs-toggle="tooltip" title="Stale: In Ready for {{ item.ready_days|round(1) }} days (threshold: {{ ready_staleness_days }}d)"><i class="bi bi-hourglass-split"></i> {{ item.ready_days|int }}d in Ready</span>
+                                {% endif %}
                                 {% if item.owner and item.owner.id != current_user.id %}
                                 <span class="badge rounded-pill bg-info text-dark" data-bs-toggle="tooltip" title="Assigned by {{ item.owner.name }}"><i class="bi bi-person-fill"></i> {{ item.owner.name[0] }}</span>
                                 {% endif %}
@@ -161,6 +176,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const itemId = itemEl.getAttribute('data-id');
                 const newStatus = toCol.getAttribute('data-status');
+
+                if (newStatus !== 'ready') {
+                    itemEl.style.background = '';
+                    itemEl.style.borderColor = '';
+                    itemEl.style.boxShadow = '';
+                    const badge = itemEl.querySelector('.stale-badge');
+                    if (badge) badge.remove();
+                }
 
                 // Make API call to update status
                 fetch(`/api/update_status/${itemId}`, {

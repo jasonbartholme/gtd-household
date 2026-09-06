@@ -92,14 +92,13 @@ BUILD_TIMESTAMP = datetime.fromtimestamp(
 
 def get_task_defaults(household_id):
     household = db.session.get(Household, household_id) if household_id else None
-    context = household.default_task_context if household and household.default_task_context else 'General'
     time_estimate = household.default_task_time_estimate if household and household.default_task_time_estimate is not None else 15
     due_days = household.default_task_due_days if household and household.default_task_due_days is not None else 14
     energy_level = household.default_task_energy_level if household and household.default_task_energy_level else 'Low'
     due_date = (get_local_now() + timedelta(days=due_days)).date()
 
     return {
-        'context': context,
+        'context': '',
         'time_estimate': time_estimate,
         'due_days': due_days,
         'energy_level': energy_level,
@@ -113,7 +112,7 @@ class Household(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    default_task_context = db.Column(db.String(100), default='General')
+    default_task_context = db.Column(db.String(100), default='')
     default_task_time_estimate = db.Column(db.Integer, default=15)
     default_task_due_days = db.Column(db.Integer, default=14)
     default_task_energy_level = db.Column(db.String(20), default='Low')
@@ -219,6 +218,7 @@ class ActionItem(db.Model):
     blocked_by_task_id = db.Column(db.Integer, db.ForeignKey('action_item.id'), nullable=True)
     owner_user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_at = db.Column(db.DateTime, default=get_local_now)
+    status_changed_at = db.Column(db.DateTime, default=get_local_now)
     completed_at = db.Column(db.DateTime, nullable=True)
     due_date = db.Column(db.DateTime, nullable=True)
     sort_order = db.Column(db.Integer, default=0)
@@ -238,6 +238,17 @@ class ActionItem(db.Model):
     supplies = db.relationship('Supply', secondary=action_supply, backref=db.backref('actions', lazy=True))
     collaborators = db.relationship('User', secondary=action_collaborators, lazy='subquery', backref=db.backref('collaborations', lazy=True))
     images = db.relationship('ImageAttachment', backref='action_item', lazy=True)
+
+    @property
+    def ready_days(self):
+        if self.status != 'ready':
+            return 0.0
+        ref_time = self.status_changed_at or self.created_at
+        if not ref_time:
+            return 0.0
+        now = get_local_now()
+        delta = (now - ref_time).total_seconds()
+        return max(0.0, delta / 86400.0)
 
 class ActivityLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -361,14 +372,18 @@ def slugify(text):
     text = text.strip('-')
     return text or 'unassigned'
 
-def format_context(text):
+def format_context(text, default='general'):
     """Formats a string into a context tag: lowercase, no spaces, starts with @."""
     if not text or not text.strip():
-        return None
+        if default is None:
+            return None
+        text = default
     # Lowercase, remove spaces, and strip any existing @ symbols
     clean_text = text.lower().replace(' ', '').replace('@', '')
     if not clean_text:
-        return None
+        if default is None:
+            return None
+        clean_text = default.lower().replace(' ', '').replace('@', '')
     # Prepend the @ symbol
     return '@' + clean_text
 
@@ -445,6 +460,13 @@ def inject_global_data():
     flash_dismiss_time = int(flash_dismiss_time_setting.value) if flash_dismiss_time_setting else 2000
     feature_descriptions_setting = db.session.get(Setting, 'show_feature_descriptions')
     show_feature_descriptions = feature_descriptions_setting.value == 'true' if feature_descriptions_setting else True
+    ready_staleness_enabled_setting = db.session.get(Setting, 'ready_staleness_enabled')
+    ready_staleness_enabled = ready_staleness_enabled_setting.value == 'true' if ready_staleness_enabled_setting else True
+    ready_staleness_days_setting = db.session.get(Setting, 'ready_staleness_days')
+    try:
+        ready_staleness_days = int(ready_staleness_days_setting.value) if ready_staleness_days_setting else 2
+    except (ValueError, AttributeError):
+        ready_staleness_days = 2
     task_defaults = get_task_defaults(hid)
 
     all_projects = Project.query.filter_by(household_id=hid, status='active', is_deleted=False).order_by(Project.name).all() if hid else []
@@ -475,6 +497,7 @@ def inject_global_data():
         'view_list': 'List Details',
         'asset_detail': 'Asset Details',
         'manage_users': 'Users',
+        'search': 'Search',
         'archive_view': 'Archive',
         'run_archive_job': 'Run Archive Job', # For manual trigger
         'settings_view': 'Settings'
@@ -498,6 +521,7 @@ def inject_global_data():
         'expense_report': ('Review Spending Patterns', 'Regular review turns captured expense data into better household decisions.'),
         'today_done_view': ('Notice Completed Work', 'Reviewing completions builds trust in your system and gives today a clear stopping point.'),
         'leaderboard': ('Celebrate Meaningful Progress', 'Use the leaderboard to notice completed commitments and recognize consistent follow-through across the household.'),
+        'search': ('Find Work Quickly', 'Search tasks and projects across your household, including completed and archived records.'),
         'archive_view': ('Keep a Record', 'Completed work is archived so your active lists stay focused while past outcomes remain available for reference.'),
         'settings_view': ('Tune Your Trusted System', 'Set defaults and display preferences that make capturing and clarifying new tasks fast and consistent.'),
         'manage_users': ('Share Commitments Clearly', 'Keep household members visible so ownership and capacity are clear when you organize next actions.'),
@@ -508,6 +532,7 @@ def inject_global_data():
     nav_links = {
         'Core': {
             'kanban': 'Board',
+            'search': 'Search',
             'inbox': 'My Tasks',
             'review': 'Review',
             'icebox_view': 'Icebox',
@@ -548,6 +573,8 @@ def inject_global_data():
         flash_dismiss_time=flash_dismiss_time,
         task_defaults=task_defaults,
         show_feature_descriptions=show_feature_descriptions,
+        ready_staleness_enabled=ready_staleness_enabled,
+        ready_staleness_days=ready_staleness_days,
         page_intro=page_intro,
         build_timestamp=BUILD_TIMESTAMP
     )
@@ -690,6 +717,11 @@ def run_migrations():
             print("Adding blocked-task fields to 'action_item' table...")
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN blocked_reason TEXT'))
             db.session.execute(text('ALTER TABLE action_item ADD COLUMN blocked_by_task_id INTEGER REFERENCES action_item(id)'))
+
+        if 'status_changed_at' not in action_item_columns:
+            print("Adding 'status_changed_at' column to 'action_item' table...")
+            db.session.execute(text('ALTER TABLE action_item ADD COLUMN status_changed_at DATETIME'))
+            db.session.execute(text('UPDATE action_item SET status_changed_at = created_at WHERE status_changed_at IS NULL'))
 
         if 'impact' not in project_columns:
             print("Adding 'impact' and 'effort' columns to 'project' table...")
@@ -1142,6 +1174,7 @@ def someday_view():
 def activate_someday(id):
     item = db.session.get(ActionItem, id)
     item.status = 'icebox'
+    item.status_changed_at = get_local_now()
     db.session.commit()
     flash(f"Activated '{item.title}'! It is now on your active Kanban board.", "success")
     return redirect(url_for('someday_view'))
@@ -1259,7 +1292,21 @@ def inbox():
         ActionItem.due_date.asc(),
         ActionItem.created_at.desc()
     ).all()
-    return render_template('inbox.html', assigned_tasks=assigned_tasks)
+
+    project_tasks = [t for t in assigned_tasks if t.project_id or t.project]
+    non_project_tasks = [t for t in assigned_tasks if not t.project_id and not t.project]
+
+    non_project_tasks_by_context = {}
+    for task in non_project_tasks:
+        ctx = task.context if (task.context and task.context.strip()) else '@general'
+        non_project_tasks_by_context.setdefault(ctx, []).append(task)
+
+    sorted_context_groups = sorted(non_project_tasks_by_context.items(), key=lambda x: x[0].lower())
+
+    return render_template('inbox.html',
+                           assigned_tasks=assigned_tasks,
+                           project_tasks=project_tasks,
+                           non_project_context_groups=sorted_context_groups)
 
 @app.route('/inbox/add', methods=['POST'])
 def add_inbox():
@@ -1429,7 +1476,7 @@ def add_action_bulk():
             project_id=project_id,
             phase_id=phase_id or (get_default_project_phase(project_id).id if project_id and get_default_project_phase(project_id) else None),
             status=status,
-            context=formatted_context or format_context(task_defaults['context']),
+            context=formatted_context,
             time_estimate=task_defaults['time_estimate'],
             energy_level=task_defaults['energy_level'],
             due_date=datetime.strptime(task_defaults['due_date'], '%Y-%m-%d'),
@@ -1454,7 +1501,10 @@ def edit_action(id):
         action.effort = float(request.form.get('effort')) if request.form.get('effort') else None
         action.context = format_context(request.form.get('context'))
         action.description = (request.form.get('description') or '').strip() or None
-        action.status = request.form.get('status')
+        new_status = request.form.get('status')
+        if new_status and new_status != action.status:
+            action.status = new_status
+            action.status_changed_at = get_local_now()
         if action.status == 'blocked':
             action.blocked_reason = (request.form.get('blocked_reason') or '').strip() or None
             blocked_by_task_id = request.form.get('blocked_by_task_id', type=int)
@@ -1552,7 +1602,9 @@ def update_status(item_id):
     new_status = request.get_json().get('status')
     respawned = False # Default value
     if new_status in ['icebox', 'ready', 'in_progress', 'blocked', 'done']:
-        action.status = new_status
+        if action.status != new_status:
+            action.status = new_status
+            action.status_changed_at = get_local_now()
         if new_status == 'done':
             action.completed_at = get_local_now()
             action.owner_user_id = session.get('user_id')
@@ -1637,18 +1689,31 @@ def icebox_view():
         return redirect(url_for('icebox_view'))
 
     # GET request
-    icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox', is_deleted=False).order_by(ActionItem.project_id, ActionItem.sort_order).all()
+    icebox_items = ActionItem.query.filter_by(household_id=hid, status='icebox', is_deleted=False).all()
 
-    # Group by project, but keep unassigned tasks newest-first so freshly added ones surface at the top.
-    from itertools import groupby
-    grouped_items = {}
-    for project, items in groupby(icebox_items, key=lambda item: item.project):
-        ordered_items = list(items)
-        if project is None:
-            ordered_items.sort(key=lambda item: item.created_at or datetime.min, reverse=True)
-        grouped_items[project] = ordered_items
+    project_tasks = [t for t in icebox_items if t.project]
+    non_project_tasks = [t for t in icebox_items if not t.project]
 
-    return render_template('icebox.html', grouped_items=grouped_items)
+    project_groups_dict = {}
+    for task in project_tasks:
+        project_groups_dict.setdefault(task.project, []).append(task)
+
+    for p in project_groups_dict:
+        project_groups_dict[p].sort(key=lambda item: item.sort_order or 0)
+
+    sorted_project_groups = sorted(project_groups_dict.items(), key=lambda x: x[0].name.lower())
+
+    non_project_tasks_by_context = {}
+    for task in non_project_tasks:
+        ctx = task.context if (task.context and task.context.strip()) else '@general'
+        non_project_tasks_by_context.setdefault(ctx, []).append(task)
+
+    sorted_context_groups = sorted(non_project_tasks_by_context.items(), key=lambda x: x[0].lower())
+
+    return render_template('icebox.html',
+                           icebox_items=icebox_items,
+                           project_groups=sorted_project_groups,
+                           non_project_context_groups=sorted_context_groups)
 
 @app.route('/review')
 def review():
@@ -1704,6 +1769,20 @@ def settings_view():
             db.session.commit()
             flash('UI settings updated.', 'success')
             return redirect(url_for('settings_view'))
+        if form_name == 'staleness_settings':
+            enabled_setting = db.session.get(Setting, 'ready_staleness_enabled') or Setting(key='ready_staleness_enabled')
+            enabled_setting.value = 'true' if 'ready_staleness_enabled' in request.form else 'false'
+            db.session.add(enabled_setting)
+            try:
+                days_val = max(1, int(request.form.get('ready_staleness_days', 2)))
+            except ValueError:
+                days_val = 2
+            days_setting = db.session.get(Setting, 'ready_staleness_days') or Setting(key='ready_staleness_days')
+            days_setting.value = str(days_val)
+            db.session.add(days_setting)
+            db.session.commit()
+            flash('Ready task staleness settings updated.', 'success')
+            return redirect(url_for('settings_view'))
         if form_name == 'feature_descriptions':
             setting = db.session.get(Setting, 'show_feature_descriptions') or Setting(key='show_feature_descriptions')
             setting.value = 'true' if 'show_feature_descriptions' in request.form else 'false'
@@ -1717,7 +1796,6 @@ def settings_view():
                 flash('Household settings are unavailable.', 'danger')
                 return redirect(url_for('settings_view'))
             try:
-                household.default_task_context = request.form.get('default_task_context', '').strip()
                 household.default_task_time_estimate = max(0, int(request.form.get('default_task_time_estimate', 15)))
                 household.default_task_due_days = max(0, int(request.form.get('default_task_due_days', 14)))
                 household.default_task_energy_level = request.form.get('default_task_energy_level', 'Low')
@@ -1784,6 +1862,60 @@ def settings_view():
 
     total_storage = sizeof_fmt(total_storage_bytes)
 
+    overview = {
+        'open_tasks': 0,
+        'ready_tasks': 0,
+        'overdue_tasks': 0,
+        'active_projects': 0,
+        'unprocessed_inbox_items': 0,
+        'has_today_activity': False,
+        'average_tasks_completed': 0,
+        'average_time_spent': 0,
+        'average_points': 0,
+        'active_users_today': 0,
+    }
+    if hid:
+        active_tasks = ActionItem.query.filter(
+            ActionItem.household_id == hid,
+            ActionItem.is_deleted == False,
+            ActionItem.status.notin_(['done', 'archived'])
+        )
+        today = get_local_now().date()
+        today_start = datetime(today.year, today.month, today.day)
+        tomorrow_start = today_start + timedelta(days=1)
+        completed_today = ActionItem.query.filter(
+            ActionItem.household_id == hid,
+            ActionItem.is_deleted == False,
+            ActionItem.completed_at >= today_start,
+            ActionItem.completed_at < tomorrow_start
+        ).all()
+        user_activity = {}
+        for task in completed_today:
+            if task.owner_user_id is None:
+                continue
+            user_stats = user_activity.setdefault(task.owner_user_id, {'tasks': 0, 'minutes': 0, 'points': 0})
+            user_stats['tasks'] += 1
+            user_stats['minutes'] += task.time_estimate or 0
+            user_stats['points'] += task.complexity_fib or 0
+
+        overview.update({
+            'open_tasks': active_tasks.count(),
+            'ready_tasks': active_tasks.filter_by(status='ready').count(),
+            'overdue_tasks': active_tasks.filter(
+                ActionItem.due_date != None,
+                ActionItem.due_date < today_start
+            ).count(),
+            'active_projects': Project.query.filter_by(household_id=hid, status='active', is_deleted=False).count(),
+            'unprocessed_inbox_items': InboxItem.query.filter_by(household_id=hid, processed_at=None).count(),
+            'has_today_activity': bool(completed_today),
+            'active_users_today': len(user_activity),
+        })
+        if user_activity:
+            active_user_count = len(user_activity)
+            overview['average_tasks_completed'] = sum(stats['tasks'] for stats in user_activity.values()) / active_user_count
+            overview['average_time_spent'] = sum(stats['minutes'] for stats in user_activity.values()) / active_user_count
+            overview['average_points'] = sum(stats['points'] for stats in user_activity.values()) / active_user_count
+
     return render_template('settings.html',
                            active_lists_count=active_lists_count,
                            purgeable_lists_count=purgeable_lists_count,
@@ -1792,7 +1924,8 @@ def settings_view():
                            total_images=total_images,
                            active_images=active_images,
                            total_storage_bytes=total_storage_bytes,
-                           total_storage=total_storage)
+                           total_storage=total_storage,
+                           overview=overview)
 
 @app.route('/leaderboard')
 def leaderboard():
@@ -2016,7 +2149,7 @@ def create_list():
         name=request.form.get('name'),
         description=request.form.get('description'),
         tags=request.form.get('tags'),
-        location_context=format_context(request.form.get('location_context'))
+        location_context=format_context(request.form.get('location_context'), default=None)
     )
     db.session.add(new_list)
     db.session.commit()
@@ -2036,7 +2169,7 @@ def edit_list(id):
     household_list.name = request.form.get('name')
     household_list.description = request.form.get('description')
     household_list.tags = request.form.get('tags')
-    household_list.location_context = format_context(request.form.get('location_context'))
+    household_list.location_context = format_context(request.form.get('location_context'), default=None)
     db.session.commit()
     flash('List updated.', 'success')
     return redirect(url_for('view_list', id=id))
@@ -2647,6 +2780,39 @@ def archive_view():
                            action_endpoint='archive_view', # For pagination links
                            project_endpoint='archive_view' # For pagination links
                            )
+
+@app.route('/search')
+def search():
+    hid = session.get('household_id')
+    q = request.args.get('q', '').strip()
+    tasks = []
+    projects = []
+
+    if hid and q:
+        search_term = f'%{q}%'
+        tasks = ActionItem.query.join(Project, ActionItem.project_id == Project.id, isouter=True).filter(
+            ActionItem.household_id == hid,
+            ActionItem.is_deleted == False,
+            (ActionItem.title.ilike(search_term)) |
+            (ActionItem.description.ilike(search_term)) |
+            (Project.name.ilike(search_term))
+        ).order_by(ActionItem.status, ActionItem.created_at.desc()).all()
+        projects = Project.query.filter(
+            Project.household_id == hid,
+            Project.is_deleted == False,
+            (Project.name.ilike(search_term)) |
+            (Project.description.ilike(search_term)) |
+            (Project.notes.ilike(search_term))
+        ).order_by(Project.status, Project.created_at.desc()).all()
+
+    return render_template(
+        'search.html',
+        q=q,
+        tasks=tasks,
+        projects=projects,
+        task_count=len(tasks),
+        project_count=len(projects)
+    )
 
 @app.route('/admin/run_archive_job', methods=['POST'])
 def run_archive_job(): # Manually trigger the archive job

@@ -16,6 +16,7 @@
                 <div class="small text-muted mt-1">
                     {% if task.project %}{{ task.project.name }}{% else %}No project{% endif %}
                     {% if task.context %} | {{ task.context }}{% endif %}
+                    {% if task.owner and task.owner.id != current_user.id %} | Assigned by {{ task.owner.name }}{% endif %}
                 </div>
             </div>
             <div class="text-end text-nowrap">
@@ -26,27 +27,36 @@
     </a>
     {% endmacro %}
 
-    {% set tasks_assigned_by_others = assigned_tasks | rejectattr('owner_user_id', 'equalto', current_user.id) | list %}
-    {% set my_owned_tasks = assigned_tasks | selectattr('owner_user_id', 'equalto', current_user.id) | list %}
     {% if assigned_tasks %}
-    {% if tasks_assigned_by_others %}
-    <section class="mb-4" aria-labelledby="assigned-by-others-heading">
-        <h2 class="h5 mb-3" id="assigned-by-others-heading">Assigned by Others</h2>
+    {% if project_tasks %}
+    <section class="mb-4" aria-labelledby="project-tasks-heading">
+        <h2 class="h5 mb-3" id="project-tasks-heading">Project Tasks</h2>
         <div class="list-group">
-            {% for task in tasks_assigned_by_others %}{{ task_row(task) }}{% endfor %}
+            {% for task in project_tasks %}{{ task_row(task) }}{% endfor %}
         </div>
     </section>
     {% endif %}
-    {% if my_owned_tasks %}
-    <section aria-labelledby="my-owned-tasks-heading">
-        <h2 class="h5 mb-3" id="my-owned-tasks-heading">My Tasks</h2>
-        <div class="list-group">
-            {% for task in my_owned_tasks %}{{ task_row(task) }}{% endfor %}
+
+    {% if non_project_context_groups %}
+    <section class="mb-4" aria-labelledby="non-project-tasks-heading">
+        <h2 class="h5 mb-3" id="non-project-tasks-heading">Tasks without Projects (by Context)</h2>
+        {% for context_name, tasks in non_project_context_groups %}
+        <div class="card mb-3">
+            <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+                <span>{{ context_name }}</span>
+                <span class="badge bg-secondary rounded-pill">{{ tasks|length }}</span>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for task in tasks %}
+                    {{ task_row(task) }}
+                {% endfor %}
+            </div>
         </div>
+        {% endfor %}
     </section>
     {% endif %}
     {% else %}
-    <div class="card card-body text-center">
+    <div class="card card-body text-center mb-4">
         <p class="mb-0 text-muted">No active tasks are assigned to you.</p>
     </div>
     {% endif %}
@@ -182,7 +192,7 @@
                     </div>
                      <div class="mb-3">
                         <label class="form-label">Context</label>
-                        <input type="text" name="context" class="form-control" value="{{ item.context or task_defaults.context }}">
+                        <input type="text" name="context" class="form-control" value="{{ item.context or '' }}">
                     </div>
                 </div>
                 <div class="row">

@@ -1,122 +1,221 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-4 settings-page">
     <h1 class="mb-4">{{ page_title }}</h1>
     {% include '_page_intro.html' %}
 
-    <div class="row g-4">
-        <div class="col-lg-4 col-md-6">
-            <div class="card h-100">
-                <div class="card-header">System Status</div>
-                <div class="card-body">
-                    <p class="d-flex justify-content-between"><span>Active Lists:</span> <strong>{{ active_lists_count }}</strong></p>
-                    <p class="d-flex justify-content-between mb-0"><span>DB Status:</span> <span class="badge bg-{{ 'success' if health.db_connected else 'danger' }}">{{ 'Connected' if health.db_connected else 'Error' }}</span></p>
-                    {% if health.status == 'ok' %}
-                        <hr>
-                        <p class="mb-0 small text-muted">Last Activity: {{ health.last_activity or 'N/A' }}</p>
-                    {% else %}
-                        <p class="text-danger mb-0 small">Error: {{ health.error }}</p>
-                    {% endif %}
+    <section class="mb-4" aria-labelledby="settings-overview-heading">
+        <h2 id="settings-overview-heading" class="h4 mb-3">Household Overview</h2>
+        <div class="row g-3">
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Open Tasks</div>
+                        <div class="fs-2 fw-semibold">{{ overview.open_tasks }}</div>
+                        <div class="small text-muted">Not done or archived</div>
+                    </div>
                 </div>
             </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Ready Tasks</div>
+                        <div class="fs-2 fw-semibold text-info">{{ overview.ready_tasks }}</div>
+                        <div class="small text-muted">Available to start</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Overdue Tasks</div>
+                        <div class="fs-2 fw-semibold {{ 'text-danger' if overview.overdue_tasks else 'text-success' }}">{{ overview.overdue_tasks }}</div>
+                        <div class="small text-muted">Open tasks past due</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Inbox to Process</div>
+                        <div class="fs-2 fw-semibold {{ 'text-warning' if overview.unprocessed_inbox_items else 'text-success' }}">{{ overview.unprocessed_inbox_items }}</div>
+                        <div class="small text-muted">Captured but unclarified</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Active Projects</div>
+                        <div class="fs-2 fw-semibold">{{ overview.active_projects }}</div>
+                        <div class="small text-muted">Currently in progress</div>
+                    </div>
+                </div>
+            </div>
+            {% if overview.has_today_activity %}
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Avg. Tasks Completed</div>
+                        <div class="fs-2 fw-semibold text-success">{{ '%.1f'|format(overview.average_tasks_completed) }}</div>
+                        <div class="small text-muted">Per active user today</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Avg. Time Spent</div>
+                        <div class="fs-2 fw-semibold text-success">{{ '%.0f'|format(overview.average_time_spent) }} min</div>
+                        <div class="small text-muted">Per active user today</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Avg. Points</div>
+                        <div class="fs-2 fw-semibold text-success">{{ '%.1f'|format(overview.average_points) }}</div>
+                        <div class="small text-muted">Per active user today</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
-        <div class="col-lg-4 col-md-6">
-            <div class="card h-100">
-                <div class="card-header">Admin Actions</div>
-                <div class="card-body">
-                    <div class="d-grid gap-2">
-                        <h6 class="card-title text-muted mb-0">Data Management</h6>
+    </section>
+
+    <nav class="nav nav-pills gap-2 mb-4" aria-label="Settings sections">
+        <a class="nav-link" href="#system-status">System Status</a>
+        <a class="nav-link" href="#admin-actions">Admin Actions</a>
+        <a class="nav-link" href="#image-stats">Image Stats</a>
+        <a class="nav-link" href="#task-defaults">Task Defaults</a>
+        <a class="nav-link" href="#ui-customization">UI Customization</a>
+        <a class="nav-link" href="#task-staleness">Task Staleness</a>
+    </nav>
+
+    <div class="border-top">
+        <section id="system-status" class="py-4 border-bottom">
+            <h2 class="h4 mb-3">System Status</h2>
+            <div class="row g-3">
+                <div class="col-md-6 col-lg-4"><strong>Active Lists:</strong> {{ active_lists_count }}</div>
+                <div class="col-md-6 col-lg-4"><strong>DB Status:</strong> <span class="badge bg-{{ 'success' if health.db_connected else 'danger' }}">{{ 'Connected' if health.db_connected else 'Error' }}</span></div>
+                {% if health.status == 'ok' %}
+                <div class="col-md-6 col-lg-4 text-muted"><strong>Last Activity:</strong> {{ health.last_activity or 'N/A' }}</div>
+                {% else %}
+                <div class="col-12 text-danger small">Error: {{ health.error }}</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section id="admin-actions" class="py-4 border-bottom">
+            <h2 class="h4 mb-3">Admin Actions</h2>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <h3 class="h6 text-muted">Data Management</h3>
+                    <div class="d-flex flex-wrap gap-2">
                         <a href="{{ url_for('export_data') }}" class="btn btn-sm btn-info">Export Backup</a>
-                        <form action="{{ url_for('import_data') }}" method="post" enctype="multipart/form-data">
-                            <div class="input-group input-group-sm">
-                                <input type="file" class="form-control form-control-sm" name="backup_file" required>
-                                <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('WARNING: This will erase all current data and replace it with the backup. Continue?');">Restore</button>
-                            </div>
+                        <form action="{{ url_for('import_data') }}" method="post" enctype="multipart/form-data" class="d-flex gap-2">
+                            <input type="file" class="form-control form-control-sm" name="backup_file" required>
+                            <button class="btn btn-sm btn-danger" type="submit" onclick="return confirm('WARNING: This will erase all current data and replace it with the backup. Continue?');">Restore</button>
                         </form>
-                        <hr>
-                        <h6 class="card-title text-muted mb-0">Maintenance</h6>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h3 class="h6 text-muted">Maintenance</h3>
+                    <div class="d-flex flex-wrap gap-2">
                         {% if purgeable_lists_count > 0 or purgeable_items_count > 0 %}
                         <form action="{{ url_for('admin_purge') }}" method="POST" onsubmit="return confirm('Permanently delete stale soft-deleted data? This cannot be undone.');">
-                            <button type="submit" class="btn btn-sm btn-danger w-100">Purge {{ purgeable_lists_count }} Lists & {{ purgeable_items_count }} Items</button>
+                            <button type="submit" class="btn btn-sm btn-danger">Purge {{ purgeable_lists_count }} Lists &amp; {{ purgeable_items_count }} Items</button>
                         </form>
                         {% endif %}
                         <form action="{{ url_for('run_archive_job') }}" method="POST">
-                            <button type="submit" class="btn btn-sm btn-secondary w-100">Run Daily Archive Job</button>
+                            <button type="submit" class="btn btn-sm btn-secondary">Run Daily Archive Job</button>
                         </form>
                     </div>
                 </div>
             </div>
-        </div>
-        <div class="col-lg-4 col-md-6">
-            <div class="card h-100">
-                <div class="card-header">Image Stats</div>
-                <div class="card-body">
-                    <p class="d-flex justify-content-between"><span>Total Images:</span> <strong>{{ total_images }}</strong></p>
-                    <p class="d-flex justify-content-between"><span>Active Images:</span> <strong>{{ active_images }}</strong></p>
-                    <p class="d-flex justify-content-between mb-0"><span>Total Storage:</span> <strong>{{ total_storage }}</strong></p>
-                    <hr>
-                    <p class="text-muted small mb-0">Images are stored in static/uploads; thumbnails stored in static/uploads/thumbs.</p>
-                </div>
-            </div>
-        </div>
+        </section>
 
-        <div class="col-lg-4 col-md-6">
-            <div class="card h-100">
-                <div class="card-header">Default Task Values</div>
-                <div class="card-body">
-                    <form action="{{ url_for('settings_view') }}" method="POST">
-                        <input type="hidden" name="form_name" value="task_defaults">
-                        <div class="mb-3">
-                            <label for="default_task_context" class="form-label">Context</label>
-                            <input type="text" class="form-control" id="default_task_context" name="default_task_context" value="{{ task_defaults.context }}" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="default_task_time_estimate" class="form-label">Time Estimate (minutes)</label>
-                            <input type="number" min="0" class="form-control" id="default_task_time_estimate" name="default_task_time_estimate" value="{{ task_defaults.time_estimate }}" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="default_task_due_days" class="form-label">Due In (days)</label>
-                            <input type="number" min="0" class="form-control" id="default_task_due_days" name="default_task_due_days" value="{{ task_defaults.due_days }}" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="default_task_energy_level" class="form-label">Energy</label>
-                            <select class="form-select" id="default_task_energy_level" name="default_task_energy_level">
-                                <option value="Low" {% if task_defaults.energy_level == 'Low' %}selected{% endif %}>Low</option>
-                                <option value="Medium" {% if task_defaults.energy_level == 'Medium' %}selected{% endif %}>Medium</option>
-                                <option value="High" {% if task_defaults.energy_level == 'High' %}selected{% endif %}>High</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100">Save Task Defaults</button>
-                    </form>
-                </div>
+        <section id="image-stats" class="py-4 border-bottom">
+            <h2 class="h4 mb-3">Image Stats</h2>
+            <div class="row g-3 mb-3">
+                <div class="col-md-4"><strong>Total Images:</strong> {{ total_images }}</div>
+                <div class="col-md-4"><strong>Active Images:</strong> {{ active_images }}</div>
+                <div class="col-md-4"><strong>Total Storage:</strong> {{ total_storage }}</div>
             </div>
-        </div>
-        <div class="col-lg-4 col-md-6">
-            <div class="card h-100">
-                <div class="card-header">UI Customization</div>
-                <div class="card-body">
-                    <form action="{{ url_for('settings_view') }}" method="POST" class="mb-4">
+            <p class="text-muted small mb-0">Images are stored in static/uploads; thumbnails stored in static/uploads/thumbs.</p>
+        </section>
+
+        <section id="task-defaults" class="py-4 border-bottom">
+            <h2 class="h4 mb-3">Default Task Values</h2>
+            <form action="{{ url_for('settings_view') }}" method="POST" class="row g-3 align-items-end">
+                <input type="hidden" name="form_name" value="task_defaults">
+                <div class="col-md-4">
+                    <label for="default_task_time_estimate" class="form-label">Time Estimate (minutes)</label>
+                    <input type="number" min="0" class="form-control" id="default_task_time_estimate" name="default_task_time_estimate" value="{{ task_defaults.time_estimate }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="default_task_due_days" class="form-label">Due In (days)</label>
+                    <input type="number" min="0" class="form-control" id="default_task_due_days" name="default_task_due_days" value="{{ task_defaults.due_days }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label for="default_task_energy_level" class="form-label">Energy</label>
+                    <select class="form-select" id="default_task_energy_level" name="default_task_energy_level">
+                        <option value="Low" {% if task_defaults.energy_level == 'Low' %}selected{% endif %}>Low</option>
+                        <option value="Medium" {% if task_defaults.energy_level == 'Medium' %}selected{% endif %}>Medium</option>
+                        <option value="High" {% if task_defaults.energy_level == 'High' %}selected{% endif %}>High</option>
+                    </select>
+                </div>
+                <div class="col-12"><button type="submit" class="btn btn-primary">Save Task Defaults</button></div>
+            </form>
+        </section>
+
+        <section id="ui-customization" class="py-4 border-bottom">
+            <h2 class="h4 mb-3">UI Customization</h2>
+            <div class="row g-4">
+                <div class="col-md-6">
+                    <form action="{{ url_for('settings_view') }}" method="POST">
                         <input type="hidden" name="form_name" value="feature_descriptions">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" role="switch" id="show_feature_descriptions" name="show_feature_descriptions" {% if show_feature_descriptions %}checked{% endif %}>
                             <label class="form-check-label" for="show_feature_descriptions">Show new-user feature descriptions</label>
                         </div>
-                        <button type="submit" class="btn btn-outline-primary btn-sm w-100 mt-3">Save Display Preference</button>
+                        <button type="submit" class="btn btn-outline-primary btn-sm mt-3">Save Display Preference</button>
                     </form>
-                    <hr>
+                </div>
+                <div class="col-md-6">
                     <form action="{{ url_for('settings_view') }}" method="POST">
                         <input type="hidden" name="form_name" value="ui_settings">
-                        <div class="mb-3">
-                            <label for="flash_dismiss_time" class="form-label">Flash Message Dismiss Time (ms)</label>
+                        <label for="flash_dismiss_time" class="form-label">Flash Message Dismiss Time (ms)</label>
+                        <div class="input-group">
                             <input type="number" class="form-control" id="flash_dismiss_time" name="flash_dismiss_time" value="{{ flash_dismiss_time }}" placeholder="e.g., 2000">
-                            <div class="form-text">Time in milliseconds before a status message disappears.</div>
+                            <button type="submit" class="btn btn-primary">Save</button>
                         </div>
-                        <button type="submit" class="btn btn-primary w-100">Save UI Settings</button>
+                        <div class="form-text">Time in milliseconds before a status message disappears.</div>
                     </form>
                 </div>
             </div>
-        </div>
+        </section>
+
+        <section id="task-staleness" class="py-4">
+            <h2 class="h4 mb-3">Ready Task Staleness</h2>
+            <form action="{{ url_for('settings_view') }}" method="POST" class="row g-3 align-items-end">
+                <input type="hidden" name="form_name" value="staleness_settings">
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="ready_staleness_enabled" name="ready_staleness_enabled" {% if ready_staleness_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="ready_staleness_enabled">Enable Staleness Indicator for Ready Tasks</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label for="ready_staleness_days" class="form-label">Staleness Threshold (days)</label>
+                    <input type="number" min="1" max="365" class="form-control" id="ready_staleness_days" name="ready_staleness_days" value="{{ ready_staleness_days }}" required>
+                    <div class="form-text">Tasks sitting in "Ready" status longer than this threshold show a staleness indicator on the Kanban board.</div>
+                </div>
+                <div class="col-md-2"><button type="submit" class="btn btn-primary">Save Staleness Settings</button></div>
+            </form>
+        </section>
     </div>
 </div>
 {% endblock %}

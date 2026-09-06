@@ -17,42 +17,82 @@
     </div>
     {% include '_page_intro.html' %}
 
-    <p class="text-muted">These items have been reviewed but are not ready to be worked on yet. Select items and move them to "Ready" to make them appear on the Kanban board.</p>
-
     <form action="{{ url_for('icebox_view') }}" method="POST" id="icebox-form">
-        {% if not grouped_items %}
+        {% if not icebox_items %}
             <div class="card card-body text-center">
                 <p class="mb-0">The icebox is empty. Well done!</p>
             </div>
         {% else %}
-            {% for project, items in grouped_items.items() %}
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        {% if project %}
-                            <a href="{{ url_for('project_detail', id=project.id) }}">{{ project.name }}</a>
-                        {% else %}
-                            No Project
-                        {% endif %}
-                    </h5>
-                </div>
-                <div class="list-group list-group-flush">
-                    {% for item in items %}
-                    <label class="list-group-item d-flex align-items-center">
-                        <input class="form-check-input me-3" type="checkbox" name="task_ids" value="{{ item.id }}">
-                        <div>
-                            <div class="fw-bold">
-                                {{ item.title }}{% if item.context %}<span class="text-warning ms-1">{{ item.context }}</span>{% endif %}
+            <div class="row">
+                <!-- Left Panel: Tasks without Projects -->
+                <div class="col-md-6 mb-4">
+                    <h4 class="mb-3">Tasks without Projects</h4>
+                    {% if non_project_context_groups %}
+                        {% for context_name, items in non_project_context_groups %}
+                        <div class="card mb-3">
+                            <div class="card-header fw-bold d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0 fs-6">{{ context_name }}</h5>
+                                <span class="badge bg-secondary rounded-pill">{{ items|length }}</span>
                             </div>
-                            {% if item.description %}
-                            <small class="text-muted">{{ item.description|truncate(100) }}</small>
-                            {% endif %}
+                            <div class="list-group list-group-flush">
+                                {% for item in items %}
+                                <label class="list-group-item d-flex align-items-center">
+                                    <input class="form-check-input me-3" type="checkbox" name="task_ids" value="{{ item.id }}">
+                                    <div>
+                                        <div class="fw-bold">
+                                            {{ item.title }}{% if item.context %}<span class="text-warning ms-1">{{ item.context }}</span>{% endif %}
+                                        </div>
+                                        {% if item.description %}
+                                        <small class="text-muted">{{ item.description|truncate(100) }}</small>
+                                        {% endif %}
+                                    </div>
+                                </label>
+                                {% endfor %}
+                            </div>
                         </div>
-                    </label>
-                    {% endfor %}
+                        {% endfor %}
+                    {% else %}
+                        <div class="card card-body text-center text-muted">
+                            <p class="mb-0">No unassigned tasks in the icebox.</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <!-- Right Panel: Project Tasks -->
+                <div class="col-md-6 mb-4">
+                    <h4 class="mb-3">Project Tasks</h4>
+                    {% if project_groups %}
+                        {% for project, items in project_groups %}
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5 class="mb-0 fs-6">
+                                    <a href="{{ url_for('project_detail', id=project.id) }}">{{ project.name }}</a>
+                                </h5>
+                            </div>
+                            <div class="list-group list-group-flush">
+                                {% for item in items %}
+                                <label class="list-group-item d-flex align-items-center">
+                                    <input class="form-check-input me-3" type="checkbox" name="task_ids" value="{{ item.id }}">
+                                    <div>
+                                        <div class="fw-bold">
+                                            {{ item.title }}{% if item.context %}<span class="text-warning ms-1">{{ item.context }}</span>{% endif %}
+                                        </div>
+                                        {% if item.description %}
+                                        <small class="text-muted">{{ item.description|truncate(100) }}</small>
+                                        {% endif %}
+                                    </div>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="card card-body text-center text-muted">
+                            <p class="mb-0">No project tasks in the icebox.</p>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
-            {% endfor %}
         {% endif %}
     </form>
 </div>
