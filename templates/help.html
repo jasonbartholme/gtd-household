@@ -24,6 +24,28 @@
             </div>
         </div>
 
+        <!-- Guide 1.4: The Five Steps of GTD -->
+        <div class="accordion-item bg-dark text-light border-secondary">
+            <h2 class="accordion-header" id="headingFiveSteps">
+                <button class="accordion-button bg-dark text-light collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFiveSteps" aria-expanded="false" aria-controls="collapseFiveSteps">
+                    New to GTD? The 5 steps, explained
+                </button>
+            </h2>
+            <div id="collapseFiveSteps" class="accordion-collapse collapse" aria-labelledby="headingFiveSteps" data-bs-parent="#helpAccordion">
+                <div class="accordion-body">
+                    <p><strong>Getting Things Done (GTD)</strong> is a personal productivity method created by David Allen. Its core promise is a calm, clear head: once you trust that every commitment is captured somewhere reliable, you can stop mentally rehearsing your to-do list and focus on what's in front of you. This app is built around GTD's five-step workflow:</p>
+                    <ol>
+                        <li><strong>Capture:</strong> Collect anything that has your attention, tasks, ideas, worries, into a trusted system instead of your head. In this app, that's the <a href="{{ url_for('inbox') }}">Inbox</a>. See the <em>Brain Dump</em> guides below for a deep dive on this step.</li>
+                        <li><strong>Clarify:</strong> Decide what each captured item actually means. Is it actionable? If so, what's the very next physical step? This happens as you process items out of your Inbox.</li>
+                        <li><strong>Organize:</strong> Put each item where it belongs, as a Task inside a <strong>Project</strong>, on a household <strong>List</strong>, parked in the <a href="{{ url_for('icebox_view') }}">Icebox</a> for later, or filed under <a href="{{ url_for('someday_view') }}">Someday/Maybe</a>.</li>
+                        <li><strong>Reflect:</strong> Step back regularly and make sure your system still matches reality. This is the job of the <a href="{{ url_for('review') }}">Weekly Review</a>.</li>
+                        <li><strong>Engage:</strong> With everything captured and organized, use your judgment to pick the best task to work on right now. This is what the <strong>Board</strong> is for.</li>
+                    </ol>
+                    <p>You don't need to memorize this list, the app's structure walks you through it naturally. But recognizing these five steps will make it much easier to understand <em>why</em> each part of the app exists.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Guide 1.5: The Brain Dump -->
         <div class="accordion-item bg-dark text-light border-secondary">
             <h2 class="accordion-header" id="headingBrainDump">
@@ -98,6 +120,22 @@
             </div>
         </div>
 
+        <!-- Guide 2.5: Contexts -->
+        <div class="accordion-item bg-dark text-light border-secondary">
+            <h2 class="accordion-header" id="headingContexts">
+                <button class="accordion-button bg-dark text-light collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseContexts" aria-expanded="false" aria-controls="collapseContexts">
+                    What are 'Contexts' and how do I use them?
+                </button>
+            </h2>
+            <div id="collapseContexts" class="accordion-collapse collapse" aria-labelledby="headingContexts" data-bs-parent="#helpAccordion">
+                <div class="accordion-body">
+                    <p>In GTD, a <strong>Context</strong> is a tag that describes <em>where</em>, <em>when</em>, or <em>with what tool</em> a task can actually get done, things like <code>@computer</code>, <code>@errands</code>, or <code>@phone</code>. The idea is that your next action isn't just "what should I do," it's "what can I do <em>right now</em>, given where I am and what's available to me?"</p>
+                    <p>You can set a Context on any task. When you're at the hardware store, you don't want to scroll past forty unrelated tasks to find the three you can actually do there, you want a filtered list of exactly those three.</p>
+                    <p>That's what the <a href="{{ url_for('context_report') }}">Context Report</a> gives you: all of your active tasks grouped by context, so you can pick useful work based on your current situation instead of re-reading your entire task list every time.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Guide 3: Using Lists -->
         <div class="accordion-item bg-dark text-light border-secondary">
             <h2 class="accordion-header" id="headingThree">
@@ -130,6 +168,25 @@
                     <p>The <a href="{{ url_for('icebox_view') }}">Icebox</a> is a holding area for tasks that you've processed from your inbox, but aren't ready to actively work on yet.</p>
                     <p>Think of it as your "on deck" list. The tasks are defined and ready to go, but keeping them in the Icebox prevents your main <a href="{{ url_for('kanban') }}">Board</a> from getting cluttered. When you're ready to start on a new batch of work, you can move items from the Icebox to the 'Ready' column.</p>
                     <p>This keeps your active board clean and focused only on what you've committed to doing soon.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Guide 4.5: Blocked vs. Waiting For -->
+        <div class="accordion-item bg-dark text-light border-secondary">
+            <h2 class="accordion-header" id="headingBlockedWaiting">
+                <button class="accordion-button bg-dark text-light collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBlockedWaiting" aria-expanded="false" aria-controls="collapseBlockedWaiting">
+                    What's the difference between 'Blocked' and 'Waiting For'?
+                </button>
+            </h2>
+            <div id="collapseBlockedWaiting" class="accordion-collapse collapse" aria-labelledby="headingBlockedWaiting" data-bs-parent="#helpAccordion">
+                <div class="accordion-body">
+                    <p>Both statuses take a task off your active Board, but for different reasons, and GTD treats them differently because <strong>who's responsible for the next move</strong> is different:</p>
+                    <ul>
+                        <li><strong>Blocked</strong> means the task can't move forward until something else in your own system finishes first, usually another task. Mark a task Blocked and link it to the task it depends on; it'll reappear once that dependency is cleared.</li>
+                        <li><strong>Waiting For</strong> is GTD's term for anything you're expecting <em>from someone else</em>: a reply to an email, a part you ordered, an answer from a coworker. You've done your part; the ball is in someone else's court.</li>
+                    </ul>
+                    <p>Keeping a real <strong>Waiting For</strong> list matters because these are exactly the commitments people quietly forget, they feel "done" to you since you took your action, but nothing will actually happen unless you follow up. Your <a href="{{ url_for('review') }}">Weekly Review</a> surfaces both your Blocked and Waiting For tasks so you can check on them and nudge things along when needed.</p>
                 </div>
             </div>
         </div>
