@@ -24,6 +24,61 @@
             </div>
         </div>
 
+        <!-- Guide 1.5: The Brain Dump -->
+        <div class="accordion-item bg-dark text-light border-secondary">
+            <h2 class="accordion-header" id="headingBrainDump">
+                <button class="accordion-button bg-dark text-light collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBrainDump" aria-expanded="false" aria-controls="collapseBrainDump">
+                    What is a 'Brain Dump'?
+                </button>
+            </h2>
+            <div id="collapseBrainDump" class="accordion-collapse collapse" aria-labelledby="headingBrainDump" data-bs-parent="#helpAccordion">
+                <div class="accordion-body">
+                    <p>A <strong>Brain Dump</strong> is the practice of emptying every open loop in your head onto paper (or into your <a href="{{ url_for('inbox') }}">Inbox</a>) in one sitting. In GTD terms, this is the first step of <strong>Capture</strong> taken to its fullest: rather than jotting down tasks one at a time as they occur to you, you set aside a few minutes to deliberately mine your mind for everything that's nagging at you.</p>
+                    <p>This includes things like:</p>
+                    <ul>
+                        <li>Unfinished tasks and errands ("renew the car registration").</li>
+                        <li>Half-formed ideas or projects you've been meaning to start.</li>
+                        <li>Nagging worries or "I should really..." thoughts.</li>
+                        <li>Commitments you've made to other people.</li>
+                    </ul>
+                    <p>The goal isn't to organize or judge these items as you write them, just to get them out of your head. Once they're captured in your Inbox, you can process each one, turning it into a Task, a Project, or a candidate for your <a href="{{ url_for('someday_view') }}">Someday/Maybe</a> list.</p>
+                    <p>Doing a brain dump periodically (not just once) is what gives GTD its signature feeling of a "mind like water": clear and ready to focus, because you trust that nothing important is being forgotten.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Guide 1.6: How to Perform a Brain Dump -->
+        <div class="accordion-item bg-dark text-light border-secondary">
+            <h2 class="accordion-header" id="headingBrainDumpHowTo">
+                <button class="accordion-button bg-dark text-light collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBrainDumpHowTo" aria-expanded="false" aria-controls="collapseBrainDumpHowTo">
+                    How do I perform a Brain Dump?
+                </button>
+            </h2>
+            <div id="collapseBrainDumpHowTo" class="accordion-collapse collapse" aria-labelledby="headingBrainDumpHowTo" data-bs-parent="#helpAccordion">
+                <div class="accordion-body">
+                    <p>Set aside 15-20 minutes of uninterrupted time, then work through it like this:</p>
+                    <ol>
+                        <li><strong>Grab a fast capture tool.</strong> Open the <a href="{{ url_for('inbox') }}">Inbox</a> (or use pen and paper if you'd rather write first and enter items later).</li>
+                        <li><strong>Write one item at a time.</strong> As soon as something comes to mind, capture it in as few words as possible and move on. Don't stop to organize, prioritize, or judge it.</li>
+                        <li><strong>Keep going until you run dry.</strong> Most people hit a wall after a few minutes, push past it. The best items often surface after the "obvious" ones are out.</li>
+                        <li><strong>Use trigger prompts to jog your memory.</strong> If you get stuck, scan categories like:</li>
+                    </ol>
+                    <ul>
+                        <li>Work projects, deadlines, and emails you're behind on.</li>
+                        <li>Home and family: repairs, errands, appointments.</li>
+                        <li>Financial or administrative to-dos (bills, renewals, filing).</li>
+                        <li>People you owe a call, reply, or favor.</li>
+                        <li>Things you're worried about or that feel "unfinished."</li>
+                        <li>Goals or ideas you've been putting off.</li>
+                    </ul>
+                    <ol start="5">
+                        <li><strong>Stop and process.</strong> Once you're truly out of items, go through your Inbox one by one and turn each into a Task, add it to a Project, or send it to your <a href="{{ url_for('someday_view') }}">Someday/Maybe</a> list.</li>
+                    </ol>
+                    <p>You don't need to get it perfect the first time. Brain dumps are most powerful as a repeated habit, do a quick one anytime you feel overwhelmed, and a fuller one as part of your <a href="{{ url_for('review') }}">Weekly Review</a>.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- Guide 2: Projects vs. Tasks -->
         <div class="accordion-item bg-dark text-light border-secondary">
             <h2 class="accordion-header" id="headingTwo">
