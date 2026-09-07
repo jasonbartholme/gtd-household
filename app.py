@@ -536,6 +536,7 @@ def inject_global_data():
             'inbox': 'My Tasks',
             'review': 'Review',
             'icebox_view': 'Icebox',
+            'help_view': 'Help',
         },
         'Reports': {
             'today_done_view': 'Today',
@@ -552,9 +553,6 @@ def inject_global_data():
             'assets': 'Assets',
             'supplies': 'Supplies',
             'archive_view': 'Archive',
-        },
-        'System': {
-            'help_view': 'Help',
         },
         'Admin': {
             'settings_view': 'Settings',
