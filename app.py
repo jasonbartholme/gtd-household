@@ -424,8 +424,8 @@ def humanize_time(dt, past_tense='{} ago', future_tense='in {}'):
     if days >= 365: return tense.format(plural(days // 365, "year"))
     if days >= 30: return tense.format(plural(days // 30, "month"))
     if days > 0: return tense.format(plural(days, "day"))
-    if seconds >= 3600: return tense.format(plural(seconds // 3600, "hour"))
-    if seconds >= 60: return tense.format(plural(seconds // 60, "minute"))
+    if seconds >= 3600: return tense.format(plural(int(seconds // 3600), "hour"))
+    if seconds >= 60: return tense.format(plural(int(seconds // 60), "minute"))
     return "just now"
 
 def relative_due_date(dt):
