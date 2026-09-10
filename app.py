@@ -2,7 +2,7 @@ import calendar
 import os
 import json
 from datetime import datetime, date, timedelta
-from flask import Flask, request, redirect, url_for, session, flash, render_template, jsonify
+from flask import Flask, request, redirect, url_for, session, flash, render_template, jsonify, send_from_directory
 from flask_apscheduler import APScheduler
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
@@ -10,6 +10,10 @@ from uuid import uuid4
 import re
 from PIL import Image
 from zoneinfo import ZoneInfo
+from dotenv import load_dotenv
+from pywebpush import webpush, WebPushException
+
+load_dotenv()
 
 # ==========================================
 # 1. APP CONFIGURATION
@@ -22,9 +26,12 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.db')
 app.config['SECRET_KEY'] = 'a-new-super-secret-key-that-is-different'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['UPLOAD_FOLDER'] = os.path.join('static', 'uploads')
+app.config['UPLOAD_FOLDER'] = os.path.join(basedir, 'static', 'uploads') # Must be absolute so it matches Flask's static_folder regardless of process cwd (e.g. PythonAnywhere WSGI)
 app.config['BACKUP_FOLDER'] = os.path.join(os.path.dirname(__file__), 'backups')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024 # 16MB max upload size
+app.config['VAPID_PUBLIC_KEY'] = os.environ.get('VAPID_PUBLIC_KEY')
+app.config['VAPID_PRIVATE_KEY'] = os.environ.get('VAPID_PRIVATE_KEY')
+app.config['VAPID_CLAIM_EMAIL'] = os.environ.get('VAPID_CLAIM_EMAIL', 'mailto:admin@example.com')
 
 db = SQLAlchemy(app)
 scheduler = APScheduler()
@@ -77,8 +84,94 @@ def daily_backup_job():
         except Exception as e:
             print(f"Error creating backup file: {e}")
 
+def send_push_to_user(user_id, title, body, url='/'):
+    """Sends a web push notification to every device the given user has subscribed on."""
+    if not app.config.get('VAPID_PRIVATE_KEY'):
+        print("Push not sent: VAPID keys are not configured.")
+        return
+    subscriptions = PushSubscription.query.filter_by(user_id=user_id).all()
+    payload = json.dumps({'title': title, 'body': body, 'url': url})
+    for sub in subscriptions:
+        try:
+            webpush(
+                subscription_info={
+                    'endpoint': sub.endpoint,
+                    'keys': {'p256dh': sub.p256dh, 'auth': sub.auth}
+                },
+                data=payload,
+                vapid_private_key=app.config['VAPID_PRIVATE_KEY'],
+                vapid_claims={'sub': app.config['VAPID_CLAIM_EMAIL']}
+            )
+        except WebPushException as ex:
+            status_code = ex.response.status_code if ex.response is not None else None
+            if status_code in (404, 410):
+                # Subscription is gone (unsubscribed/expired) — remove it.
+                db.session.delete(sub)
+                db.session.commit()
+            else:
+                print(f"Push failed for user {user_id}: {ex}")
 
+PUSH_REMINDER_DEFAULTS = {
+    'push_reminder_enabled': 'true',
+    'push_reminder_time': '07:00',
+    'push_reminder_title': 'Tasks Today',
+    'push_reminder_body': 'You have {count} task(s) scheduled for today.'
+}
 
+def get_push_reminder_settings():
+    """Reads the configurable daily task-reminder push settings, falling back to defaults."""
+    result = {}
+    for key, default in PUSH_REMINDER_DEFAULTS.items():
+        setting = db.session.get(Setting, key)
+        result[key] = setting.value if setting and setting.value else default
+    result['push_reminder_enabled'] = result['push_reminder_enabled'] == 'true'
+    return result
+
+def push_due_reminders_job():
+    """Sends each user with tasks due today a push notification, once per day at the configured time."""
+    with app.app_context():
+        settings = get_push_reminder_settings()
+        if not settings['push_reminder_enabled']:
+            return
+
+        now = get_local_now()
+        try:
+            reminder_hour, reminder_minute = (int(part) for part in settings['push_reminder_time'].split(':'))
+        except (ValueError, AttributeError):
+            reminder_hour, reminder_minute = 7, 0
+        if now.hour != reminder_hour or now.minute != reminder_minute:
+            return
+
+        today_str = now.date().isoformat()
+        last_sent_setting = db.session.get(Setting, 'push_reminder_last_sent_date')
+        if last_sent_setting and last_sent_setting.value == today_str:
+            return
+
+        today_start = datetime(now.year, now.month, now.day)
+        tomorrow_start = today_start + timedelta(days=1)
+        due_today_tasks = ActionItem.query.filter(
+            ActionItem.status.notin_(['done', 'archived']),
+            ActionItem.is_deleted == False,
+            ActionItem.due_date >= today_start,
+            ActionItem.due_date < tomorrow_start,
+            ActionItem.owner_user_id != None
+        ).all()
+
+        counts_by_owner = {}
+        for task in due_today_tasks:
+            counts_by_owner[task.owner_user_id] = counts_by_owner.get(task.owner_user_id, 0) + 1
+
+        for owner_id, count in counts_by_owner.items():
+            try:
+                body = settings['push_reminder_body'].format(count=count)
+            except (KeyError, IndexError):
+                body = f"You have {count} task(s) scheduled for today."
+            send_push_to_user(owner_id, settings['push_reminder_title'], body, url='/kanban')
+
+        last_sent_setting = last_sent_setting or Setting(key='push_reminder_last_sent_date')
+        last_sent_setting.value = today_str
+        db.session.add(last_sent_setting)
+        db.session.commit()
 
 PER_PAGE = 10 # Constant for pagination
 
@@ -361,6 +454,16 @@ class ListItem(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
 
+class PushSubscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    endpoint = db.Column(db.Text, nullable=False, unique=True)
+    p256dh = db.Column(db.String(255), nullable=False)
+    auth = db.Column(db.String(255), nullable=False)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+
+    user = db.relationship('User', backref=db.backref('push_subscriptions', cascade='all, delete-orphan'))
+
 class Setting(db.Model):
     key = db.Column(db.String(50), primary_key=True)
     value = db.Column(db.String(255), nullable=False)
@@ -574,7 +677,8 @@ def inject_global_data():
         ready_staleness_enabled=ready_staleness_enabled,
         ready_staleness_days=ready_staleness_days,
         page_intro=page_intro,
-        build_timestamp=BUILD_TIMESTAMP
+        build_timestamp=BUILD_TIMESTAMP,
+        vapid_public_key=app.config.get('VAPID_PUBLIC_KEY')
     )
 first_run = True
 
@@ -644,6 +748,54 @@ def logout():
     session.clear()
     flash('You have been successfully logged out.', 'info')
     return redirect(url_for('kanban'))
+
+@app.route('/sw.js')
+def service_worker():
+    """Serves the service worker from the root so its scope covers the whole site."""
+    response = send_from_directory(basedir, 'sw.js')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+@app.route('/push/subscribe', methods=['POST'])
+def push_subscribe():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint')
+    keys = data.get('keys') or {}
+    if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
+        return jsonify({'error': 'Invalid subscription payload'}), 400
+
+    sub = PushSubscription.query.filter_by(endpoint=endpoint).first()
+    if not sub:
+        sub = PushSubscription(endpoint=endpoint)
+    sub.user_id = user_id
+    sub.p256dh = keys['p256dh']
+    sub.auth = keys['auth']
+    db.session.add(sub)
+    db.session.commit()
+    return jsonify({'status': 'subscribed'})
+
+@app.route('/push/unsubscribe', methods=['POST'])
+def push_unsubscribe():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+    data = request.get_json(silent=True) or {}
+    endpoint = data.get('endpoint')
+    if endpoint:
+        PushSubscription.query.filter_by(endpoint=endpoint, user_id=user_id).delete()
+        db.session.commit()
+    return jsonify({'status': 'unsubscribed'})
+
+@app.route('/push/test', methods=['POST'])
+def push_test():
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({'error': 'Not logged in'}), 401
+    send_push_to_user(user_id, 'Test Notification', 'Push notifications are working!', url='/')
+    return jsonify({'status': 'sent'})
 
 def run_migrations():
     """One-time or idempotent migrations to run on startup."""
@@ -1442,6 +1594,12 @@ def add_action():
 
     db.session.add(action)
     db.session.commit()
+
+    acting_user_id = session.get('user_id')
+    for collaborator in action.collaborators:
+        if collaborator.id != acting_user_id:
+            send_push_to_user(collaborator.id, 'New task assigned', action.title, url=f"/action/{action.id}/edit")
+
     flash(f"New task '{action.title}' created!", "success")
     return redirect(request.referrer or url_for('kanban'))
 
@@ -1491,6 +1649,7 @@ def add_action_bulk():
 def edit_action(id):
     action = db.session.get(ActionItem, id)
     if request.method == 'POST':
+        previous_collaborator_ids = {c.id for c in action.collaborators}
         action.title = request.form.get('title')
         action.item_type = request.form.get('item_type')
         action.complexity_fib = int(request.form.get('complexity_fib'))
@@ -1574,6 +1733,13 @@ def edit_action(id):
 
         db.session.commit()
         log_activity(session.get('user_id'), 'edit_action', f"Updated: {action.title}")
+
+        acting_user_id = session.get('user_id')
+        newly_added_ids = {c.id for c in action.collaborators} - previous_collaborator_ids
+        for collaborator_id in newly_added_ids:
+            if collaborator_id != acting_user_id:
+                send_push_to_user(collaborator_id, 'New task assigned', action.title, url=f"/action/{action.id}/edit")
+
         flash("Action updated.", "success")
         return redirect(url_for('kanban'))
 
@@ -1803,6 +1969,29 @@ def settings_view():
             db.session.commit()
             flash('Default task values updated.', 'success')
             return redirect(url_for('settings_view'))
+        if form_name == 'push_reminder_settings':
+            time_str = request.form.get('push_reminder_time', '07:00')
+            try:
+                hour, minute = (int(part) for part in time_str.split(':'))
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    raise ValueError
+            except (ValueError, AttributeError):
+                flash('Enter a valid reminder time.', 'danger')
+                return redirect(url_for('settings_view'))
+
+            values = {
+                'push_reminder_enabled': 'true' if 'push_reminder_enabled' in request.form else 'false',
+                'push_reminder_time': f"{hour:02d}:{minute:02d}",
+                'push_reminder_title': (request.form.get('push_reminder_title') or '').strip() or PUSH_REMINDER_DEFAULTS['push_reminder_title'],
+                'push_reminder_body': (request.form.get('push_reminder_body') or '').strip() or PUSH_REMINDER_DEFAULTS['push_reminder_body']
+            }
+            for key, value in values.items():
+                setting = db.session.get(Setting, key) or Setting(key=key)
+                setting.value = value
+                db.session.add(setting)
+            db.session.commit()
+            flash('Push reminder settings updated.', 'success')
+            return redirect(url_for('settings_view'))
 
     # Data for System Stats
     active_lists_count = 0
@@ -1923,7 +2112,8 @@ def settings_view():
                            active_images=active_images,
                            total_storage_bytes=total_storage_bytes,
                            total_storage=total_storage,
-                           overview=overview)
+                           overview=overview,
+                           push_reminder=get_push_reminder_settings())
 
 @app.route('/leaderboard')
 def leaderboard():
@@ -2898,5 +3088,6 @@ if __name__ == '__main__':
     scheduler.init_app(app)
     # Add the new daily backup job to the scheduler
     scheduler.add_job(id='DailyBackupJob', func=daily_backup_job, trigger='cron', hour=2) # Runs at 2 AM
+    scheduler.add_job(id='PushDueRemindersJob', func=push_due_reminders_job, trigger='cron', minute='*') # Checked every minute; actual send time is configurable in Settings
     scheduler.start()
     app.run(host='0.0.0.0', port=5000, debug=True)

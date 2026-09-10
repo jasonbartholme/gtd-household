@@ -97,6 +97,7 @@
         <a class="nav-link" href="#task-defaults">Task Defaults</a>
         <a class="nav-link" href="#ui-customization">UI Customization</a>
         <a class="nav-link" href="#task-staleness">Task Staleness</a>
+        <a class="nav-link" href="#push-notifications">Push Notifications</a>
     </nav>
 
     <div class="border-top">
@@ -219,6 +220,34 @@
                     <div class="form-text">Tasks sitting in "Ready" status longer than this threshold show a staleness indicator on the Kanban board.</div>
                 </div>
                 <div class="col-md-2"><button type="submit" class="btn btn-primary">Save Staleness Settings</button></div>
+            </form>
+        </section>
+
+        <section id="push-notifications" class="py-4">
+            <h2 class="h4 mb-3">Push Notifications</h2>
+            <form action="{{ url_for('settings_view') }}" method="POST" class="row g-3 align-items-end">
+                <input type="hidden" name="form_name" value="push_reminder_settings">
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="push_reminder_enabled" name="push_reminder_enabled" {% if push_reminder.push_reminder_enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="push_reminder_enabled">Send a daily reminder for tasks due today</label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label for="push_reminder_time" class="form-label">Send Time</label>
+                    <input type="time" class="form-control" id="push_reminder_time" name="push_reminder_time" value="{{ push_reminder.push_reminder_time }}" required>
+                    <div class="form-text">Local household time; typically set early in the morning.</div>
+                </div>
+                <div class="col-12">
+                    <label for="push_reminder_title" class="form-label">Notification Title</label>
+                    <input type="text" maxlength="100" class="form-control" id="push_reminder_title" name="push_reminder_title" value="{{ push_reminder.push_reminder_title }}">
+                </div>
+                <div class="col-12">
+                    <label for="push_reminder_body" class="form-label">Notification Message</label>
+                    <input type="text" maxlength="200" class="form-control" id="push_reminder_body" name="push_reminder_body" value="{{ push_reminder.push_reminder_body }}">
+                    <div class="form-text">Use <code>{count}</code> as a placeholder for the number of tasks due today.</div>
+                </div>
+                <div class="col-12"><button type="submit" class="btn btn-primary">Save Push Reminder Settings</button></div>
             </form>
         </section>
     </div>

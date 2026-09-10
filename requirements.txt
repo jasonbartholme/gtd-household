@@ -4,3 +4,5 @@ Werkzeug==3.0.1
 Flask-APScheduler==1.12.4
 python-dotenv==0.20.0
 Pillow==10.4.0
+cryptography<43
+pywebpush==2.1.2
