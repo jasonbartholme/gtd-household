@@ -3,28 +3,28 @@
 {% block content %}
 <div class="container mt-4">
     <div class="card mb-4">
-        <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="card-header d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
             <div class="flex-grow-1">
-                <div class="d-flex align-items-center mb-1">
-                    <h1 class="mb-0 h4 me-3">{{ project.name }}</h1>
+                <div class="d-flex flex-wrap align-items-center mb-1 gap-2">
+                    <h1 class="mb-0 h4">{{ project.name }}</h1>
                     <span class="badge bg-{{ 'success' if project.status == 'completed' else 'primary' }}">{{ project.status|title }}</span>
-                    <span class="badge bg-secondary ms-2">{{ percentage_completed }}% Completed</span>
+                    <span class="badge bg-secondary">{{ percentage_completed }}% Completed</span>
                 </div>
                 <p class="text-muted mb-0 small">Created: {{ project.created_at|humanize }}</p>
                 {% if project.due_date %}
                 <p class="text-muted mb-0 small"><i class="bi bi-calendar-event"></i> Due: {{ project.due_date.strftime('%Y-%m-%d') }}</p>
                 {% endif %}
             </div>
-            <div>
+            <div class="d-flex flex-wrap gap-2">
                 <a href="{{ url_for('edit_project', id=project.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
-                <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" class="d-inline ms-2">
+                <form action="{{ url_for('toggle_project_status', id=project.id) }}" method="POST" class="m-0">
                     {% if project.status == 'active' %}
                         <button type="submit" class="btn btn-sm btn-outline-success">Mark as Completed</button>
                     {% else %}
                         <button type="submit" class="btn btn-sm btn-outline-info">Re-open Project</button>
                     {% endif %}
                 </form>
-                <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" class="d-inline ms-2 confirm-delete">
+                <form action="{{ url_for('delete_project', id=project.id) }}" method="POST" class="m-0 confirm-delete">
                     <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                 </form>
             </div>
@@ -102,10 +102,10 @@
             {% set phase_name = group.phase.name if group.phase else group.name|default('Unassigned') %}
             {% set phase_id = group.phase.id if group.phase else 'unassigned' %}
             <div class="card mb-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">{{ phase_name }}</h5>
+                <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <h5 class="mb-0 text-truncate" style="min-width: 0;">{{ phase_name }}</h5>
                     {% if group.phase %}
-                    <div class="btn-group btn-group-sm">
+                    <div class="btn-group btn-group-sm flex-shrink-0">
                         <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editPhaseModal-{{ phase_id }}" aria-label="Edit {{ phase_name }}"><i class="bi bi-pencil"></i></button>
                         <form action="{{ url_for('delete_project_phase', project_id=project.id, phase_id=phase_id) }}" method="POST" onsubmit="return confirm('Delete this phase? Its tasks will move to another active phase.');">
                             <button type="submit" class="btn btn-outline-danger" aria-label="Delete {{ phase_name }}"><i class="bi bi-trash"></i></button>

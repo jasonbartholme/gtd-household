@@ -2,10 +2,10 @@
 
 {% block content %}
 <div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center mb-4 gap-2">
         <h1 class="mb-0">{{ page_title }}</h1>
-        <div class="d-flex align-items-center gap-2">
-            <select name="project_id" form="icebox-form" class="form-select" aria-label="Assign selected tasks to a project">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <select name="project_id" form="icebox-form" class="form-select" aria-label="Assign selected tasks to a project" style="min-width: 0;">
                 <option value="">Add selected to project...</option>
                 {% for project in all_projects %}
                 <option value="{{ project.id }}">{{ project.name }}</option>

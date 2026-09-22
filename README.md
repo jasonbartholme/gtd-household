@@ -1,4 +1,4 @@
-GTD Household Manager
+GTD Second Brain Manager
 =====================
 
 A comprehensive, Python-driven household management system built around the "Getting Things Done" (GTD) methodology. This application is designed as a fully functional application using Flask and SQLite, making it easy to deploy locally on a home network.
