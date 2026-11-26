@@ -58,6 +58,24 @@
                     </div>
                 </div>
             </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Total Completed Tasks</div>
+                        <div class="fs-2 fw-semibold text-success">{{ overview.completed_tasks }}</div>
+                        <div class="small text-muted">Done and archived tasks</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="text-muted small mb-1">Total Completed Projects</div>
+                        <div class="fs-2 fw-semibold text-success">{{ overview.completed_projects }}</div>
+                        <div class="small text-muted">Projects marked completed</div>
+                    </div>
+                </div>
+            </div>
             {% if overview.has_today_activity %}
             <div class="col-sm-6 col-xl-3">
                 <div class="card h-100">

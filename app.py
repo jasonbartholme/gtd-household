@@ -2575,6 +2575,8 @@ def settings_view():
         'ready_tasks': 0,
         'overdue_tasks': 0,
         'active_projects': 0,
+        'completed_tasks': 0,
+        'completed_projects': 0,
         'unprocessed_inbox_items': 0,
         'has_today_activity': False,
         'average_tasks_completed': 0,
@@ -2614,6 +2616,16 @@ def settings_view():
                 ActionItem.due_date < today_start
             ).count(),
             'active_projects': Project.query.filter_by(household_id=hid, status='active', is_deleted=False).count(),
+            'completed_tasks': ActionItem.query.filter(
+                ActionItem.household_id == hid,
+                ActionItem.is_deleted == False,
+                ActionItem.status.in_(['done', 'archived'])
+            ).count(),
+            'completed_projects': Project.query.filter_by(
+                household_id=hid,
+                status='completed',
+                is_deleted=False
+            ).count(),
             'unprocessed_inbox_items': InboxItem.query.filter_by(household_id=hid, processed_at=None).count(),
             'has_today_activity': bool(completed_today),
             'active_users_today': len(user_activity),
