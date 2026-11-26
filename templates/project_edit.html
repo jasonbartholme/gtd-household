@@ -19,6 +19,17 @@
                     <label for="notes" class="form-label">Project Notes</label>
                     <textarea class="form-control" id="notes" name="notes" rows="8">{{ project.notes or '' }}</textarea>
                 </div>
+                <div class="row">
+                    <div class="col-md-5 mb-3">
+                        <label for="wiki_category" class="form-label">Wiki Category</label>
+                        <input type="text" class="form-control" id="wiki_category" name="wiki_category" value="{{ project.wiki_category or '' }}" placeholder="Vehicle Maintenance">
+                    </div>
+                    <div class="col-md-7 mb-3">
+                        <label for="wiki_tags" class="form-label">Wiki Tags</label>
+                        <input type="text" class="form-control" id="wiki_tags" name="wiki_tags" value="{{ project.wiki_tags or '' }}" placeholder="car, brake, maintenance">
+                        <div class="form-text">Task contexts, related assets, and supplies are included automatically.</div>
+                    </div>
+                </div>
 
                 <div class="row">
                     <div class="col-md-6 mb-3">

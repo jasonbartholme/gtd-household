@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4 wiki-page">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('wiki') }}">Wiki</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('wiki', category=page.category) }}">{{ page.category }}</a></li>
+            <li class="breadcrumb-item active" aria-current="page">{{ page.title }}</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
+        <div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <h1 class="mb-0">{{ page.title }}</h1>
+                {% if page.is_locked %}<span class="badge bg-warning text-dark"><i class="bi bi-lock-fill"></i> User edited</span>{% endif %}
+            </div>
+            {% for tag in (page.tags or '').split(',') %}
+                {% if tag.strip() %}<span class="badge bg-secondary me-1">#{{ tag.strip() }}</span>{% endif %}
+            {% endfor %}
+            <p class="small text-muted mt-2 mb-0">Updated {{ page.updated_at|humanize if page.updated_at else '' }}</p>
+        </div>
+        <div class="d-flex flex-wrap align-items-start gap-2">
+            {% if page.project and not page.project.is_deleted %}
+            <a href="{{ url_for('project_detail', id=page.project_id) }}" class="btn btn-outline-secondary btn-sm">Source Project</a>
+            {% endif %}
+            <a href="{{ url_for('edit_wiki_page', id=page.id) }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil"></i> Edit Page</a>
+        </div>
+    </div>
+
+    {% if page.is_locked %}
+        <div class="alert alert-warning d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+            <span>Automatic updates are paused because this page was edited by a user.</span>
+            {% if page.project and not page.project.is_deleted %}
+            <form action="{{ url_for('unlock_wiki_page', id=page.id) }}" method="POST" onsubmit="return confirm('Replace these edits with the current project data and resume automatic updates?');">
+                <button type="submit" class="btn btn-sm btn-outline-dark">Resume Automatic Updates</button>
+            </form>
+            {% endif %}
+        </div>
+        <article class="card">
+            <div class="card-body" style="white-space: pre-wrap;">{{ page.body or 'This page is empty.' }}</div>
+        </article>
+    {% else %}
+        {% if data.overview %}
+        <section class="card mb-4">
+            <div class="card-body">
+                <h2 class="h4">Overview</h2>
+                <div style="white-space: pre-wrap;">{{ data.overview }}</div>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if data.asset %}
+        <section class="card mb-4">
+            <div class="card-body">
+                <h2 class="h4">Related Asset</h2>
+                <p class="mb-1"><a href="{{ url_for('asset_detail', id=data.asset.id) }}">{{ data.asset.name }}</a>{% if data.asset.category %} · {{ data.asset.category|title }}{% endif %}</p>
+                {% if data.asset.notes %}<p class="text-muted" style="white-space: pre-wrap;">{{ data.asset.notes }}</p>{% endif %}
+                {% if data.asset.manual_url %}<a href="{{ data.asset.manual_url }}" target="_blank" rel="noopener">Manufacturer manual</a>{% endif %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% if data.supplies %}
+        <section class="card mb-4">
+            <div class="card-body">
+                <h2 class="h4">Supplies and Materials</h2>
+                <ul class="mb-0">
+                    {% for supply in data.supplies %}
+                    <li>{% if supply.purchase_url %}<a href="{{ supply.purchase_url }}" target="_blank" rel="noopener">{{ supply.name }}</a>{% else %}{{ supply.name }}{% endif %}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </section>
+        {% endif %}
+
+        <section class="mb-4">
+            <h2 class="h4 mb-3">Procedure</h2>
+            {% for phase in data.phases %}
+                {% if phase.tasks %}
+                <div class="card mb-3">
+                    <div class="card-header"><h3 class="h5 mb-0">{{ phase.name }}</h3></div>
+                    <ol class="list-group list-group-flush">
+                        {% for task in phase.tasks %}
+                        <li class="list-group-item py-3">
+                            <div class="d-flex flex-wrap justify-content-between gap-2">
+                                <h4 class="h6 mb-1">{{ task.title }}</h4>
+                                <div>
+                                    {% if task.time_estimate %}<span class="badge bg-info text-dark">{{ task.time_estimate }} min</span>{% endif %}
+                                    {% if task.context %}<span class="badge bg-secondary">{{ task.context }}</span>{% endif %}
+                                </div>
+                            </div>
+                            {% if task.description %}<div class="text-body-secondary mt-2" style="white-space: pre-wrap;">{{ task.description }}</div>{% endif %}
+                            {% if task.images %}
+                            <div class="d-flex flex-wrap gap-3 mt-3">
+                                {% for image in task.images %}
+                                <figure class="mb-0" style="max-width: 260px;">
+                                    <a href="{{ url_for('static', filename='uploads/' ~ image.filename) }}" target="_blank">
+                                        <img src="{{ url_for('static', filename='uploads/thumbs/' ~ image.filename) }}" class="img-fluid rounded border" alt="{{ image.caption or task.title }}">
+                                    </a>
+                                    {% if image.caption %}<figcaption class="small text-muted mt-1">{{ image.caption }}</figcaption>{% endif %}
+                                </figure>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ol>
+                </div>
+                {% endif %}
+            {% else %}
+            <div class="card card-body text-muted">Add tasks to the source project to build out this procedure.</div>
+            {% endfor %}
+        </section>
+
+        {% if data.notes %}
+        <section class="card mb-4">
+            <div class="card-body">
+                <h2 class="h4">Project Notes</h2>
+                <div style="white-space: pre-wrap;">{{ data.notes }}</div>
+            </div>
+        </section>
+        {% endif %}
+
+        {% if data.project_images %}
+        <section class="mb-4">
+            <h2 class="h4">Photos</h2>
+            <div class="d-flex flex-wrap gap-3">
+                {% for image in data.project_images %}
+                <figure class="mb-0" style="max-width: 320px;">
+                    <a href="{{ url_for('static', filename='uploads/' ~ image.filename) }}" target="_blank">
+                        <img src="{{ url_for('static', filename='uploads/thumbs/' ~ image.filename) }}" class="img-fluid rounded border" alt="{{ image.caption or page.title }}">
+                    </a>
+                    {% if image.caption %}<figcaption class="small text-muted mt-1">{{ image.caption }}</figcaption>{% endif %}
+                </figure>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        {% for household_list in data.related_lists %}
+        <section class="card mb-4">
+            <div class="card-body">
+                <h2 class="h4"><a href="{{ url_for('view_list', id=household_list.id) }}">{{ household_list.name }}</a></h2>
+                {% if household_list.description %}<p>{{ household_list.description }}</p>{% endif %}
+                {% if household_list['items'] %}
+                <ul class="mb-0">{% for item in household_list['items'] %}<li>{{ item }}</li>{% endfor %}</ul>
+                {% endif %}
+            </div>
+        </section>
+        {% endfor %}
+    {% endif %}
+</div>
+{% endblock %}

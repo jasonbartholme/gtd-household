@@ -24,6 +24,8 @@ Key Features
 *   **Collaborator Assignment:** Assign multiple users to a task. Shared Board cards identify the person who assigned the task to the current viewer.
 *   **Recurring Tasks:** Actions can be set to recur automatically. Completing a recurring task automatically calculates the next due date and respawns it in the Icebox.
 *   **Contexts & Due Dates:** Assign contexts and due dates to visually track where and when things need to happen.
+*   **Duplicate-Aware Task Capture:** While entering a single task, fuzzy title matching surfaces existing tasks as clickable results, including exact-name matches, without preventing intentional duplicates.
+*   **Errands by Location:** A Core-menu Errands view combines active tasks and household lists whose tags or contexts contain "errand," grouping them by stop and showing needed list items at a glance.
 
 <img width="1419" height="856" alt="active-projecs-view" src="https://github.com/user-attachments/assets/ec85d8cf-4d78-4c55-a7ce-4e7898bd4a46" />
 
@@ -34,6 +36,7 @@ Key Features
 *   **Project-Asset Association:** Link projects to specific assets to track work history and costs related to an item.
 *   **Manual Task Sorting:** Within a project, drag and drop tasks to manually define their priority and execution order.
 *   **Project Images:** Upload, caption, edit, and delete project images with generated thumbnails and storage statistics.
+*   **Self-Building Wiki:** Completed and active projects automatically become category-based how-to pages using task descriptions, phases, images, contexts, notes, assets, supplies, and matching reference lists. Pages can be curated by hand; the first user edit locks the page against future automatic changes until automatic updates are explicitly resumed.
 *   **Someday/Maybe Incubator:** Store ideas you aren't ready to commit to yet, keeping your active board clutter-free. Activate them with a single click when you're ready.
 *   **Dynamic Calendar:** A visual monthly calendar grid highlighting days with due actions, now offering both grid and list views.
 *   **Household Lists:** Create custom, searchable, taggable lists (e.g., Groceries, Packing, Menards Run) tied to specific geographical contexts. Features drag-and-drop reordering, quick-add, filtering, sorting, and soft-deletion.

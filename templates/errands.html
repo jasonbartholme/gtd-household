@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-start gap-3 mb-4">
+        <div>
+            <h1 class="mb-1">Errands</h1>
+            <p class="text-muted mb-0">Everything tagged for errands, organized by stop.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <span class="badge bg-primary fs-6">{{ location_count }} stop{{ '' if location_count == 1 else 's' }}</span>
+            <span class="badge bg-secondary fs-6">{{ task_count }} task{{ '' if task_count == 1 else 's' }}</span>
+            <span class="badge bg-secondary fs-6">{{ list_count }} list{{ '' if list_count == 1 else 's' }}</span>
+        </div>
+    </div>
+    {% include '_page_intro.html' %}
+
+    {% if location_groups %}
+    <div class="row g-4">
+        {% for group in location_groups %}
+        <div class="col-lg-6 col-xl-4">
+            <section class="card h-100 border-secondary">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 class="h5 mb-0"><i class="bi bi-geo-alt text-warning"></i> {{ group.label }}</h2>
+                    <span class="badge bg-secondary">{{ group.tasks|length + group.lists|length }}</span>
+                </div>
+
+                {% if group.tasks %}
+                <div class="card-body border-bottom border-secondary">
+                    <h3 class="h6 text-uppercase text-muted mb-2">Tasks</h3>
+                    <div class="list-group">
+                        {% for task in group.tasks %}
+                        <a href="{{ url_for('edit_action', id=task.id) }}" class="list-group-item list-group-item-action">
+                            <div class="d-flex justify-content-between gap-2">
+                                <span class="fw-semibold">{{ task.title }}</span>
+                                <span class="badge bg-secondary text-nowrap">{{ task.status|replace('_', ' ')|title }}</span>
+                            </div>
+                            {% if task.description %}
+                            <div class="small text-muted mt-1">{{ task.description|truncate(120) }}</div>
+                            {% endif %}
+                            <div class="small text-muted mt-1">
+                                {% if task.project %}{{ task.project.name }}{% endif %}
+                                {% if task.due_date %}{% if task.project %} · {% endif %}Due {{ task.due_date|relative_due_date }}{% endif %}
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if group.lists %}
+                <div class="card-body">
+                    <h3 class="h6 text-uppercase text-muted mb-2">Lists</h3>
+                    {% for list_data in group.lists %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <a href="{{ url_for('view_list', id=list_data.list.id) }}" class="fw-semibold text-info text-decoration-none">
+                                {{ list_data.list.name }}
+                            </a>
+                            <span class="badge bg-warning text-dark">{{ list_data.pending_count }} needed</span>
+                        </div>
+                        {% if list_data.list.description %}
+                        <div class="small text-muted">{{ list_data.list.description|truncate(100) }}</div>
+                        {% endif %}
+                        {% if list_data.pending_items %}
+                        <ul class="small mt-2 mb-0 ps-3">
+                            {% for item in list_data.pending_items[:6] %}
+                            <li>{{ item.content }}</li>
+                            {% endfor %}
+                            {% if list_data.pending_count > 6 %}
+                            <li class="text-muted">+ {{ list_data.pending_count - 6 }} more</li>
+                            {% endif %}
+                        </ul>
+                        {% else %}
+                        <div class="small text-success mt-2"><i class="bi bi-check-circle"></i> Everything checked off</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </section>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card card-body text-center py-5">
+        <i class="bi bi-basket2 fs-1 text-muted"></i>
+        <h2 class="h5 mt-3">No errand stops yet</h2>
+        <p class="text-muted mb-1">Add “errand” to a task context or list tag, optionally followed by the location.</p>
+        <p class="text-muted mb-0">Examples: <code>@errand-menards</code>, <code>errands, Woodmans</code>, or an Errand-type task with a location context.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -247,7 +247,9 @@
                             <div class="modal-body">
                                 <div class="mb-3">
                                     <label for="task-title" class="form-label">Title</label>
-                                    <input type="text" name="title" id="task-title" class="form-control" required>
+                                    <input type="text" name="title" id="task-title" class="form-control" required autocomplete="off" aria-describedby="task-duplicate-hint" aria-controls="task-duplicate-list" aria-expanded="false">
+                                    <div id="task-duplicate-hint" class="form-text">As you type, similar existing tasks will appear below.</div>
+                                    <div id="task-duplicate-list" class="list-group mt-2 d-none" aria-live="polite"></div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
@@ -473,6 +475,99 @@
             });
             refreshPhaseSelect('bulk-task-project', 'bulk-task-phase');
         }
+
+        (function initTaskDuplicateCheck() {
+            const titleInput = document.getElementById('task-title');
+            const resultsList = document.getElementById('task-duplicate-list');
+            if (!titleInput || !resultsList) return;
+
+            let debounceTimer = null;
+            let activeRequest = null;
+
+            function clearResults() {
+                resultsList.replaceChildren();
+                resultsList.classList.add('d-none');
+                titleInput.setAttribute('aria-expanded', 'false');
+            }
+
+            function renderMatches(tasks) {
+                resultsList.replaceChildren();
+                if (!tasks.length) {
+                    clearResults();
+                    return;
+                }
+
+                const heading = document.createElement('div');
+                heading.className = 'list-group-item bg-warning-subtle text-warning-emphasis small fw-semibold';
+                heading.textContent = 'Possible existing tasks — open one instead, or keep creating a duplicate.';
+                resultsList.appendChild(heading);
+
+                tasks.forEach(function(task) {
+                    const link = document.createElement('a');
+                    link.href = task.url;
+                    link.className = 'list-group-item list-group-item-action';
+
+                    const top = document.createElement('div');
+                    top.className = 'd-flex justify-content-between align-items-start gap-2';
+
+                    const title = document.createElement('span');
+                    title.className = 'fw-semibold';
+                    title.textContent = task.title;
+                    top.appendChild(title);
+
+                    if (task.exact) {
+                        const badge = document.createElement('span');
+                        badge.className = 'badge bg-warning text-dark text-nowrap';
+                        badge.textContent = 'Exact match';
+                        top.appendChild(badge);
+                    }
+
+                    const metadata = document.createElement('div');
+                    metadata.className = 'small text-muted mt-1';
+                    metadata.textContent = [task.status, task.project, task.context].filter(Boolean).join(' · ');
+
+                    link.append(top, metadata);
+                    resultsList.appendChild(link);
+                });
+                resultsList.classList.remove('d-none');
+                titleInput.setAttribute('aria-expanded', 'true');
+            }
+
+            titleInput.addEventListener('input', function() {
+                clearTimeout(debounceTimer);
+                if (activeRequest) activeRequest.abort();
+                const query = titleInput.value.trim();
+                if (query.length < 3) {
+                    clearResults();
+                    return;
+                }
+
+                debounceTimer = setTimeout(function() {
+                    activeRequest = new AbortController();
+                    fetch('{{ url_for("similar_tasks") }}?q=' + encodeURIComponent(query), {
+                        signal: activeRequest.signal,
+                        headers: { 'Accept': 'application/json' }
+                    })
+                    .then(function(response) {
+                        if (!response.ok) throw new Error('Task lookup failed');
+                        return response.json();
+                    })
+                    .then(function(data) { renderMatches(data.tasks || []); })
+                    .catch(function(error) {
+                        if (error.name !== 'AbortError') clearResults();
+                    });
+                }, 250);
+            });
+
+            const taskModal = document.getElementById('newTaskModal');
+            if (taskModal) {
+                taskModal.addEventListener('hidden.bs.modal', function() {
+                    clearTimeout(debounceTimer);
+                    if (activeRequest) activeRequest.abort();
+                    clearResults();
+                });
+            }
+        })();
 
         // Sidebar Toggle Logic
         const body = document.getElementById('app-body');

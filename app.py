@@ -8,6 +8,7 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 from uuid import uuid4
 import re
+from difflib import SequenceMatcher
 from PIL import Image
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
@@ -234,6 +235,8 @@ class Project(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     impact = db.Column(db.Float, nullable=True) # 0-100, subjective impact rating
     effort = db.Column(db.Float, nullable=True) # 0-100, subjective effort rating
+    wiki_category = db.Column(db.String(100), nullable=True)
+    wiki_tags = db.Column(db.String(500), nullable=True)
 
     actions = db.relationship('ActionItem', backref='project', lazy=True, order_by="ActionItem.sort_order")
     phases = db.relationship('ProjectPhase', backref='project', lazy=True, order_by='ProjectPhase.sort_order')
@@ -428,6 +431,23 @@ class ImageAttachment(db.Model):
     created_at = db.Column(db.DateTime, default=get_local_now)
 
 
+class WikiPage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=True)
+    title = db.Column(db.String(200), nullable=False)
+    slug = db.Column(db.String(220), nullable=False)
+    category = db.Column(db.String(100), nullable=False, default='General')
+    tags = db.Column(db.String(500), nullable=True)
+    body = db.Column(db.Text, nullable=True)
+    generated_data = db.Column(db.Text, nullable=True)
+    is_locked = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, default=get_local_now)
+
+    project = db.relationship('Project', backref=db.backref('wiki_pages', lazy=True))
+
+
 class HouseholdList(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     household_id = db.Column(db.Integer, db.ForeignKey('household.id'), nullable=False)
@@ -489,6 +509,286 @@ def format_context(text, default='general'):
         clean_text = default.lower().replace(' ', '').replace('@', '')
     # Prepend the @ symbol
     return '@' + clean_text
+
+def parse_tags(*values):
+    """Return normalized, de-duplicated tags from comma-separated fields and iterables."""
+    tags = []
+    for value in values:
+        if not value:
+            continue
+        candidates = value if isinstance(value, (list, tuple, set)) else str(value).split(',')
+        for candidate in candidates:
+            tag = str(candidate).strip().lstrip('#@').lower()
+            if tag and tag not in tags:
+                tags.append(tag)
+    return tags
+
+def wiki_title_for_project(project):
+    name = (project.name or '').strip()
+    if name.lower().startswith('project to '):
+        return f"How to {name[len('project to '):].strip()}"
+    if name.lower().startswith('project:'):
+        return f"How to {name.split(':', 1)[1].strip()}"
+    if name.lower().startswith('how to '):
+        return name
+    return name or 'Untitled Guide'
+
+def make_unique_wiki_slug(title, household_id, page_id=None):
+    base_slug = slugify(title)
+    slug = base_slug
+    suffix = 2
+    while WikiPage.query.filter(
+        WikiPage.household_id == household_id,
+        WikiPage.slug == slug,
+        WikiPage.id != page_id
+    ).first():
+        slug = f'{base_slug}-{suffix}'
+        suffix += 1
+    return slug
+
+def get_project_wiki_tags(project):
+    values = [project.wiki_tags]
+    values.extend(task.context for task in project.actions if not task.is_deleted and task.context)
+    if project.asset:
+        values.extend([project.asset.category, project.asset.context])
+    values.extend(supply.context for supply in project.supplies if not supply.is_deleted and supply.context)
+    return parse_tags(*values)
+
+def get_project_wiki_category(project, tags):
+    if project.wiki_category and project.wiki_category.strip():
+        return project.wiki_category.strip()
+    if project.asset and project.asset.category and project.asset.category.strip():
+        return project.asset.category.strip().title()
+    if tags:
+        return tags[0].replace('-', ' ').title()
+    return 'General'
+
+def build_wiki_data(project):
+    tags = get_project_wiki_tags(project)
+    phases = ProjectPhase.query.filter_by(project_id=project.id, is_deleted=False).order_by(
+        ProjectPhase.sort_order.asc(), ProjectPhase.created_at.asc()
+    ).all()
+    phase_steps = []
+    for phase in phases:
+        tasks = ActionItem.query.filter_by(
+            project_id=project.id, phase_id=phase.id, is_deleted=False
+        ).order_by(ActionItem.sort_order.asc(), ActionItem.created_at.asc()).all()
+        phase_steps.append({
+            'name': phase.name,
+            'tasks': [{
+                'id': task.id,
+                'title': task.title,
+                'description': task.description,
+                'status': task.status,
+                'context': task.context,
+                'time_estimate': task.time_estimate,
+                'images': [{
+                    'filename': image.filename,
+                    'caption': image.caption
+                } for image in sorted(task.images, key=lambda image: image.created_at or get_local_now())]
+            } for task in tasks]
+        })
+
+    unassigned = ActionItem.query.filter_by(
+        project_id=project.id, phase_id=None, is_deleted=False
+    ).order_by(ActionItem.sort_order.asc(), ActionItem.created_at.asc()).all()
+    if unassigned:
+        phase_steps.insert(0, {
+            'name': 'Unassigned',
+            'tasks': [{
+                'id': task.id,
+                'title': task.title,
+                'description': task.description,
+                'status': task.status,
+                'context': task.context,
+                'time_estimate': task.time_estimate,
+                'images': [{
+                    'filename': image.filename,
+                    'caption': image.caption
+                } for image in sorted(task.images, key=lambda image: image.created_at or get_local_now())]
+            } for task in unassigned]
+        })
+
+    normalized_tag_set = set(tags)
+    related_lists = []
+    for household_list in HouseholdList.query.filter_by(
+        household_id=project.household_id, is_deleted=False
+    ).order_by(HouseholdList.name.asc()).all():
+        list_tags = parse_tags(household_list.tags, household_list.location_context)
+        if normalized_tag_set.intersection(list_tags):
+            related_lists.append({
+                'id': household_list.id,
+                'name': household_list.name,
+                'description': household_list.description,
+                'items': [
+                    item.content for item in household_list.items
+                    if not item.is_deleted
+                ]
+            })
+
+    return {
+        'category': get_project_wiki_category(project, tags),
+        'tags': tags,
+        'overview': project.description,
+        'notes': project.notes,
+        'asset': {
+            'id': project.asset.id,
+            'name': project.asset.name,
+            'category': project.asset.category,
+            'notes': project.asset.notes,
+            'manual_url': project.asset.manual_url
+        } if project.asset else None,
+        'supplies': [
+            {'id': supply.id, 'name': supply.name, 'purchase_url': supply.purchase_url}
+            for supply in project.supplies if not supply.is_deleted
+        ],
+        'phases': phase_steps,
+        'project_images': [{
+            'filename': image.filename,
+            'caption': image.caption
+        } for image in sorted(project.images, key=lambda image: image.created_at or get_local_now())],
+        'related_lists': related_lists
+    }
+
+def sync_wiki_page_for_project(project):
+    if not project or project.is_deleted:
+        return None
+    page = WikiPage.query.filter_by(
+        household_id=project.household_id, project_id=project.id
+    ).first()
+    if page and page.is_locked:
+        return page
+
+    wiki_data = build_wiki_data(project)
+    generated_data = json.dumps(wiki_data)
+    generated_title = wiki_title_for_project(project)
+    generated_tags = ', '.join(wiki_data['tags'])
+    if not page:
+        page = WikiPage(
+            household_id=project.household_id,
+            project_id=project.id,
+            title=generated_title,
+            slug=make_unique_wiki_slug(generated_title, project.household_id),
+            category=wiki_data['category']
+        )
+        db.session.add(page)
+        db.session.flush()
+    new_slug = make_unique_wiki_slug(generated_title, project.household_id, page.id)
+    changed = (
+        page.title != generated_title
+        or page.slug != new_slug
+        or page.category != wiki_data['category']
+        or page.tags != generated_tags
+        or page.generated_data != generated_data
+    )
+    page.title = generated_title
+    page.slug = new_slug
+    page.category = wiki_data['category']
+    page.tags = generated_tags
+    page.generated_data = generated_data
+    if changed:
+        page.updated_at = get_local_now()
+    return page
+
+def wiki_data_as_text(page):
+    if page.is_locked:
+        return page.body or ''
+    data = json.loads(page.generated_data) if page.generated_data else {}
+    sections = []
+    if data.get('overview'):
+        sections.append(f"Overview\n\n{data['overview']}")
+    if data.get('asset'):
+        asset_lines = [f"Related Asset\n\n{data['asset']['name']}"]
+        if data['asset'].get('notes'):
+            asset_lines.append(data['asset']['notes'])
+        sections.append('\n'.join(asset_lines))
+    if data.get('supplies'):
+        sections.append('Supplies and Materials\n\n' + '\n'.join(
+            f"- {supply['name']}" for supply in data['supplies']
+        ))
+    procedure_lines = ['Procedure']
+    for phase in data.get('phases', []):
+        if not phase.get('tasks'):
+            continue
+        procedure_lines.extend(['', phase['name']])
+        for index, task in enumerate(phase['tasks'], start=1):
+            procedure_lines.append(f"{index}. {task['title']}")
+            if task.get('description'):
+                procedure_lines.append(f"   {task['description']}")
+            for image in task.get('images', []):
+                if image.get('caption'):
+                    procedure_lines.append(f"   Photo: {image['caption']}")
+    if len(procedure_lines) > 1:
+        sections.append('\n'.join(procedure_lines))
+    if data.get('notes'):
+        sections.append(f"Notes\n\n{data['notes']}")
+    if data.get('project_images'):
+        captions = [image['caption'] for image in data['project_images'] if image.get('caption')]
+        if captions:
+            sections.append('Photos\n\n' + '\n'.join(f"- {caption}" for caption in captions))
+    return '\n\n'.join(sections)
+
+def has_errand_tag(*values):
+    return any('errand' in tag.lower() for tag in parse_tags(*values))
+
+def errand_location(tags=None, location_context=None, fallback=None):
+    """Normalize errand metadata into a stable grouping key and display label."""
+    parsed_tags = parse_tags(tags)
+    location = (location_context or '').strip().lstrip('@#')
+    location_without_errand = re.sub(r'errands?', '', location, flags=re.IGNORECASE).strip(' -_:')
+
+    if location_without_errand:
+        raw_location = location_without_errand
+    else:
+        errand_specific_tags = []
+        non_errand_tags = []
+        for tag in parsed_tags:
+            without_errand = re.sub(r'errands?', '', tag, flags=re.IGNORECASE).strip(' -_:')
+            if 'errand' in tag.lower() and without_errand:
+                errand_specific_tags.append(without_errand)
+            elif 'errand' not in tag.lower():
+                non_errand_tags.append(tag)
+        raw_location = (errand_specific_tags or non_errand_tags or [fallback or 'General Errands'])[0]
+
+    raw_location = re.sub(r'[_-]+', ' ', str(raw_location).strip())
+    key = re.sub(r'[^a-z0-9]+', '', raw_location.lower())
+    if not key:
+        raw_location = 'General Errands'
+        key = 'generalerrands'
+    label = re.sub(r'\s+', ' ', raw_location).strip().title()
+    return key, label
+
+def normalize_task_title(title):
+    return re.sub(r'[^a-z0-9]+', ' ', (title or '').lower()).strip()
+
+def task_title_similarity(query, title):
+    normalized_query = normalize_task_title(query)
+    normalized_title = normalize_task_title(title)
+    if not normalized_query or not normalized_title:
+        return 0.0
+    if normalized_query == normalized_title:
+        return 1.0
+    if normalized_query in normalized_title or normalized_title in normalized_query:
+        return 0.95
+
+    sequence_score = SequenceMatcher(
+        None, normalized_query, normalized_title
+    ).ratio()
+    query_tokens = set(normalized_query.split())
+    title_tokens = set(normalized_title.split())
+    token_score = len(query_tokens.intersection(title_tokens)) / len(query_tokens.union(title_tokens))
+    return max(sequence_score, token_score)
+
+def sync_wiki_pages(household_id):
+    existing_pages = WikiPage.query.filter_by(household_id=household_id).all()
+    pages_by_id = {page.id: page for page in existing_pages}
+    projects = Project.query.filter_by(household_id=household_id, is_deleted=False).all()
+    for project in projects:
+        page = sync_wiki_page_for_project(project)
+        if page:
+            pages_by_id[page.id] = page
+    db.session.commit()
+    return list(pages_by_id.values())
 
 def log_activity(user_id, action_type, description):
     if user_id:
@@ -597,6 +897,10 @@ def inject_global_data():
         'supplies': 'Supplies',
         'project_detail': 'Project Details',
         'edit_project': 'Edit Project',
+        'wiki': 'Wiki',
+        'wiki_page': 'Wiki Page',
+        'edit_wiki_page': 'Edit Wiki Page',
+        'errands': 'Errands',
         'view_list': 'List Details',
         'asset_detail': 'Asset Details',
         'manage_users': 'Users',
@@ -625,6 +929,8 @@ def inject_global_data():
         'today_done_view': ('Notice Completed Work', 'Review completed work across any day or time span to build trust in your system and recognize progress.'),
         'leaderboard': ('Celebrate Meaningful Progress', 'Use the leaderboard to notice completed commitments and recognize consistent follow-through across the household.'),
         'search': ('Find Work Quickly', 'Search tasks and projects across your household, including completed and archived records.'),
+        'wiki': ('Build on What You Already Know', 'The wiki turns project history, task descriptions, contexts, images, lists, assets, and supplies into reusable household guides.'),
+        'errands': ('See Every Stop at a Glance', 'Tasks and lists tagged for errands are grouped by location so nothing gets missed while you are away from home.'),
         'archive_view': ('Keep a Record', 'Completed work is archived so your active lists stay focused while past outcomes remain available for reference.'),
         'settings_view': ('Tune Your Trusted System', 'Set defaults and display preferences that make capturing and clarifying new tasks fast and consistent.'),
         'manage_users': ('Share Commitments Clearly', 'Keep household members visible so ownership and capacity are clear when you organize next actions.'),
@@ -636,6 +942,8 @@ def inject_global_data():
         'Core': {
             'kanban': 'Board',
             'search': 'Search',
+            'wiki': 'Wiki',
+            'errands': 'Errands',
             'inbox': 'My Tasks',
             'review': 'Review',
             'icebox_view': 'Icebox',
@@ -882,6 +1190,11 @@ def run_migrations():
             print("Adding 'notes' column to 'project' table...")
             db.session.execute(text('ALTER TABLE project ADD COLUMN notes TEXT'))
 
+        if 'wiki_category' not in project_columns:
+            db.session.execute(text('ALTER TABLE project ADD COLUMN wiki_category VARCHAR(100)'))
+        if 'wiki_tags' not in project_columns:
+            db.session.execute(text('ALTER TABLE project ADD COLUMN wiki_tags VARCHAR(500)'))
+
         for project in Project.query.all():
             if not ProjectPhase.query.filter_by(project_id=project.id, is_deleted=False).first():
                 db.session.add(ProjectPhase(project_id=project.id, household_id=project.household_id, name='General', sort_order=0))
@@ -1082,6 +1395,8 @@ def add_project():
         name=request.form.get('name'),
         description=request.form.get('description'),
         notes=request.form.get('notes'),
+        wiki_category=(request.form.get('wiki_category') or '').strip() or None,
+        wiki_tags=', '.join(parse_tags(request.form.get('wiki_tags'))),
         asset_id=int(request.form.get('asset_id')) if request.form.get('asset_id') else None,
         estimated_cost=float(request.form.get('estimated_cost')) if request.form.get('estimated_cost') else None,
         due_date=datetime.strptime(due_date_str, '%Y-%m-%d') if due_date_str else None
@@ -1090,6 +1405,8 @@ def add_project():
     db.session.commit()
     default_phase = ProjectPhase(project_id=p.id, household_id=p.household_id, name='General', sort_order=0)
     db.session.add(default_phase)
+    db.session.commit()
+    sync_wiki_page_for_project(p)
     db.session.commit()
     flash(f"Created Project: {p.name}", "success")
     return redirect(url_for('manage_projects'))
@@ -1107,6 +1424,8 @@ def project_detail(id):
         return redirect(url_for('manage_projects'))
 
     if project:
+        sync_wiki_page_for_project(project)
+        db.session.commit()
         project_expenses = project.expenses.order_by(Expense.date.desc()).all()
         project_expense_total = sum(expense.amount for expense in project_expenses)
         total_actions = len(project.actions)
@@ -1239,6 +1558,8 @@ def edit_project(id):
         project.name = request.form.get('name')
         project.description = request.form.get('description')
         project.notes = request.form.get('notes')
+        project.wiki_category = (request.form.get('wiki_category') or '').strip() or None
+        project.wiki_tags = ', '.join(parse_tags(request.form.get('wiki_tags')))
         project.asset_id = int(request.form.get('asset_id')) if request.form.get('asset_id') else None
 
         project.estimated_cost = float(request.form.get('estimated_cost')) if request.form.get('estimated_cost') else None
@@ -1281,6 +1602,8 @@ def edit_project(id):
                 db.session.add(ImageAttachment(household_id=session.get('household_id'), filename=unique_name, project_id=project.id, caption=request.form.get('image_description')))
 
         db.session.commit()
+        sync_wiki_page_for_project(project)
+        db.session.commit()
         log_activity(session.get('user_id'), 'edit_project', f"Updated project: {project.name}")
         flash(f"Project '{project.name}' updated successfully.", "success")
         return redirect(url_for('project_detail', id=id))
@@ -1289,6 +1612,175 @@ def edit_project(id):
     all_assets = Asset.query.filter_by(household_id=hid).order_by(Asset.name).all()
     all_supplies = Supply.query.filter_by(household_id=hid, is_deleted=False).order_by(Supply.name).all()
     return render_template('project_edit.html', project=project, all_assets=all_assets, all_supplies=all_supplies)
+
+@app.route('/wiki')
+def wiki():
+    household_id = session.get('household_id')
+    if not household_id:
+        return redirect(url_for('kanban'))
+
+    pages = sync_wiki_pages(household_id)
+    query = (request.args.get('q') or '').strip()
+    selected_category = (request.args.get('category') or '').strip()
+    visible_pages = []
+    for page in pages:
+        search_text = ' '.join([
+            page.title or '',
+            page.category or '',
+            page.tags or ''
+        ]).lower()
+        if query and query.lower() not in search_text:
+            continue
+        if selected_category and page.category != selected_category:
+            continue
+        visible_pages.append(page)
+
+    categories = {}
+    for page in sorted(visible_pages, key=lambda item: item.title.lower()):
+        categories.setdefault(page.category or 'General', []).append(page)
+    all_categories = sorted({page.category or 'General' for page in pages}, key=str.lower)
+    return render_template(
+        'wiki.html',
+        categories=dict(sorted(categories.items(), key=lambda item: item[0].lower())),
+        all_categories=all_categories,
+        query=query,
+        selected_category=selected_category,
+        page_count=len(visible_pages),
+        locked_count=sum(1 for page in pages if page.is_locked)
+    )
+
+@app.route('/wiki/sync', methods=['POST'])
+def sync_wiki():
+    household_id = session.get('household_id')
+    if not household_id:
+        return redirect(url_for('kanban'))
+    pages = sync_wiki_pages(household_id)
+    flash(f'Refreshed {len(pages)} wiki page(s). Locked pages were preserved.', 'success')
+    return redirect(url_for('wiki'))
+
+@app.route('/wiki/<int:id>/<slug>')
+def wiki_page(id, slug):
+    page = db.session.get(WikiPage, id)
+    if not page or page.household_id != session.get('household_id'):
+        flash('Wiki page not found.', 'danger')
+        return redirect(url_for('wiki'))
+
+    if not page.is_locked and page.project and not page.project.is_deleted:
+        sync_wiki_page_for_project(page.project)
+        db.session.commit()
+    if page.slug != slug:
+        return redirect(url_for('wiki_page', id=page.id, slug=page.slug))
+
+    generated_data = json.loads(page.generated_data) if page.generated_data else {}
+    return render_template('wiki_detail.html', page=page, data=generated_data)
+
+@app.route('/wiki/<int:id>/edit', methods=['GET', 'POST'])
+def edit_wiki_page(id):
+    page = db.session.get(WikiPage, id)
+    if not page or page.household_id != session.get('household_id'):
+        flash('Wiki page not found.', 'danger')
+        return redirect(url_for('wiki'))
+
+    if request.method == 'POST':
+        title = (request.form.get('title') or '').strip()
+        category = (request.form.get('category') or '').strip()
+        if not title or not category:
+            flash('Title and category are required.', 'warning')
+            return redirect(url_for('edit_wiki_page', id=page.id))
+        page.title = title
+        page.slug = make_unique_wiki_slug(title, page.household_id, page.id)
+        page.category = category
+        page.tags = ', '.join(parse_tags(request.form.get('tags')))
+        page.body = (request.form.get('body') or '').strip()
+        page.is_locked = True
+        page.updated_at = get_local_now()
+        db.session.commit()
+        log_activity(session.get('user_id'), 'edit_wiki_page', f"Updated wiki page: {page.title}")
+        flash('Wiki page saved. Automatic updates are now locked to protect your edits.', 'success')
+        return redirect(url_for('wiki_page', id=page.id, slug=page.slug))
+
+    return render_template('wiki_edit.html', page=page, initial_body=wiki_data_as_text(page))
+
+@app.route('/wiki/<int:id>/unlock', methods=['POST'])
+def unlock_wiki_page(id):
+    page = db.session.get(WikiPage, id)
+    if not page or page.household_id != session.get('household_id'):
+        flash('Wiki page not found.', 'danger')
+        return redirect(url_for('wiki'))
+    if not page.project or page.project.is_deleted:
+        flash('This page no longer has a project source and cannot resume automatic updates.', 'warning')
+        return redirect(url_for('wiki_page', id=page.id, slug=page.slug))
+
+    page.is_locked = False
+    page.body = None
+    sync_wiki_page_for_project(page.project)
+    db.session.commit()
+    flash('Automatic wiki updates resumed from the source project.', 'success')
+    return redirect(url_for('wiki_page', id=page.id, slug=page.slug))
+
+@app.route('/errands')
+def errands():
+    household_id = session.get('household_id')
+    active_tasks = ActionItem.query.filter(
+        ActionItem.household_id == household_id,
+        ActionItem.is_deleted == False,
+        ActionItem.status.notin_(['done', 'archived', 'someday'])
+    ).order_by(
+        ActionItem.due_date.is_(None),
+        ActionItem.due_date.asc(),
+        ActionItem.title.asc()
+    ).all()
+    errand_lists = HouseholdList.query.filter_by(
+        household_id=household_id,
+        is_deleted=False
+    ).order_by(HouseholdList.name.asc()).all()
+
+    locations = {}
+
+    def get_location(key, label):
+        return locations.setdefault(key, {
+            'key': key,
+            'label': label,
+            'tasks': [],
+            'lists': []
+        })
+
+    for task in active_tasks:
+        if task.item_type != 'errand' and not has_errand_tag(task.context):
+            continue
+        key, label = errand_location(
+            tags=task.context,
+            fallback=None
+        )
+        get_location(key, label)['tasks'].append(task)
+
+    for household_list in errand_lists:
+        if not has_errand_tag(household_list.tags, household_list.location_context):
+            continue
+        key, label = errand_location(
+            tags=household_list.tags,
+            location_context=household_list.location_context,
+            fallback=household_list.name
+        )
+        items = sorted(
+            [item for item in household_list.items if not item.is_deleted],
+            key=lambda item: (item.is_checked, item.sort_order)
+        )
+        pending_items = [item for item in items if not item.is_checked]
+        get_location(key, label)['lists'].append({
+            'list': household_list,
+            'pending_items': pending_items,
+            'pending_count': len(pending_items)
+        })
+
+    location_groups = sorted(locations.values(), key=lambda group: group['label'].lower())
+    return render_template(
+        'errands.html',
+        location_groups=location_groups,
+        task_count=sum(len(group['tasks']) for group in location_groups),
+        list_count=sum(len(group['lists']) for group in location_groups),
+        location_count=len(location_groups)
+    )
 
 @app.route('/projects/<int:id>/delete', methods=['POST'])
 def delete_project(id):
@@ -1602,6 +2094,35 @@ def add_action():
 
     flash(f"New task '{action.title}' created!", "success")
     return redirect(request.referrer or url_for('kanban'))
+
+@app.route('/api/tasks/similar')
+def similar_tasks():
+    query = (request.args.get('q') or '').strip()
+    if len(normalize_task_title(query)) < 3:
+        return jsonify({'tasks': []})
+
+    existing_tasks = ActionItem.query.filter(
+        ActionItem.household_id == session.get('household_id'),
+        ActionItem.is_deleted == False
+    ).order_by(ActionItem.created_at.desc()).all()
+
+    matches = []
+    for task in existing_tasks:
+        score = task_title_similarity(query, task.title)
+        if score >= 0.55:
+            matches.append({
+                'id': task.id,
+                'title': task.title,
+                'status': (task.status or '').replace('_', ' ').title(),
+                'project': task.project.name if task.project else None,
+                'context': task.context,
+                'exact': score == 1.0,
+                'score': round(score, 3),
+                'url': url_for('edit_action', id=task.id)
+            })
+
+    matches.sort(key=lambda match: (-match['score'], match['title'].lower()))
+    return jsonify({'tasks': matches[:8]})
 
 @app.route('/action/add_bulk', methods=['POST'])
 def add_action_bulk():

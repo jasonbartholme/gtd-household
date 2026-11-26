@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('wiki') }}">Wiki</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Edit {{ page.title }}</li>
+        </ol>
+    </nav>
+
+    <h1 class="mb-2">Edit Wiki Page</h1>
+    <div class="alert alert-info">
+        Saving this page locks it from future automatic updates. This protects the curated version from changes to its source project.
+    </div>
+
+    <form action="{{ url_for('edit_wiki_page', id=page.id) }}" method="POST" class="card card-body">
+        <div class="mb-3">
+            <label for="title" class="form-label">Title</label>
+            <input id="title" class="form-control" type="text" name="title" value="{{ page.title }}" required>
+        </div>
+        <div class="row">
+            <div class="col-md-5 mb-3">
+                <label for="category" class="form-label">Category</label>
+                <input id="category" class="form-control" type="text" name="category" value="{{ page.category }}" required>
+            </div>
+            <div class="col-md-7 mb-3">
+                <label for="tags" class="form-label">Tags</label>
+                <input id="tags" class="form-control" type="text" name="tags" value="{{ page.tags or '' }}" placeholder="home, repair, vehicle">
+            </div>
+        </div>
+        <div class="mb-3">
+            <label for="body" class="form-label">Page Content</label>
+            <textarea id="body" class="form-control" name="body" rows="18">{{ initial_body }}</textarea>
+            <div class="form-text">Plain text is displayed with line breaks preserved.</div>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-secondary" href="{{ url_for('wiki_page', id=page.id, slug=page.slug) }}">Cancel</a>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-lock-fill"></i> Save and Lock</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
