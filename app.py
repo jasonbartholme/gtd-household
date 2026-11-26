@@ -24,7 +24,14 @@ load_dotenv()
 # 1. Grab the absolute path of the directory this file is in
 app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'app.db')
+database_path = os.environ.get('GTD_DATABASE_PATH', os.path.join(basedir, 'app.db'))
+if not os.path.isabs(database_path):
+    database_path = os.path.join(basedir, database_path)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + database_path
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'connect_args': {'timeout': 30}
+}
 app.config['SECRET_KEY'] = 'a-new-super-secret-key-that-is-different'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(basedir, 'static', 'uploads') # Must be absolute so it matches Flask's static_folder regardless of process cwd (e.g. PythonAnywhere WSGI)

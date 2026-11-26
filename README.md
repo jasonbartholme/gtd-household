@@ -91,6 +91,8 @@ This application is designed for easy local setup.
 5.  **Access:** Open your web browser and navigate to `http://localhost:5000`. The SQLite database (`app.db`) will be created automatically on the first run, seeded with sample demo data.
 6.  **Backups and uploads:** JSON backups are written to `backups/`; project, asset, and supply images are stored under `static/uploads/`.
 
+For production deployments, set `GTD_DATABASE_PATH` to an absolute writable path outside the Git checkout. Deployments must stop and reload the web app before replacing or restoring a SQLite file, and the database plus its parent directory must remain writable by the application user.
+
 Tech Stack
 -------------
 
